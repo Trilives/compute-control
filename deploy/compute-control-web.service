@@ -1,0 +1,30 @@
+[Unit]
+Description=Compute Control web console
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=compute-control
+Group=compute-control
+WorkingDirectory=/opt/compute-control/current
+ExecStart=/opt/compute-control/current/.venv/bin/compute-control --config /etc/compute-control/config.toml serve
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+StateDirectory=compute-control-console
+StateDirectoryMode=0700
+NoNewPrivileges=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/compute-control-console
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

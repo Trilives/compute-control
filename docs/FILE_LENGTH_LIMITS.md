@@ -7,11 +7,21 @@
 | 路径 | 上限（行） | 基线（行） | 例外 | 理由 |
 | --- | --- | --- | --- | --- |
 | `.gitignore` | 30 | 27 | 无 | 仅登记秘密和运行产物，不承载工作流程 |
-| `ARCHITECTURE.md` | 430 | 429 | 无 | 现有完整生命周期及安全边界集中说明，补充依赖与数据流仍可单篇阅读 |
+| `.env` | 10 | 3 | 私密且 Git 忽略 | 仅提供用户授权的目标 SSH 接入信息，不含公开配置 |
+| `ARCHITECTURE.md` | 460 | 429 | 无 | 现有完整生命周期及安全边界集中说明，补充依赖与数据流仍可单篇阅读 |
 | `README.md` | 80 | 43 | 无 | 小型设计项目的导航入口，保留状态与链接即可 |
 | `config.toml` | 50 | 10 | 无 | 实际启动配置，逐项解释由配置说明负责 |
 | `docs/CONFIGURATION.md` | 100 | 33 | 无 | 逐项配置及秘密供应，避免混入产品指南 |
-| `docs/FILE_LENGTH_LIMITS.md` | 100 | 90 | 无 | 当前全部文本逐文件登记及清理规则，新文件增加条目 |
+| `docs/DEPLOYMENT.md` | 100 | 44 | 无 | 正式部署、HTTPS、systemd、精确防火墙、备份与回滚 |
+| `deploy/compute-control-web.service` | 60 | 30 | 无 | 独立非 root HTTPS Web 服务及低端口绑定能力 |
+| `deploy/compute-control-worker.service` | 60 | 28 | 无 | 单主后台 worker 的 systemd 运行和持久状态约束 |
+| `deploy/compute-control-http.conf` | 30 | 6 | 无 | 明确授权 HTTP 时覆盖 Web TLS 启动参数 |
+| `tests/test_http_transport.py` | 280 | 132 | 无 | 显式 HTTP、默认 TLS、配置类型、Cookie/CSRF 及真实浏览器迁移回归 |
+| `docs/records/2026-11-04-http-access.md` | 120 | 43 | 无 | 本次 HTTP 授权、部署、RED/GREEN、覆盖率和实际验证交接 |
+| `docs/records/2026-11-04-illustrated-tutorials.md` | 80 | 21 | 无 | 分角色图文教程、内部凭据隔离、范围修改及制作中发现的 HTTP 表单兼容修复 |
+| `docs/records/2026-11-04-production-deployment.md` | 100 | 42 | 无 | 本次中断恢复、实际部署、数据迁移、备份及验收边界 |
+| `docs/records/2026-11-04-vpn-access.md` | 80 | 16 | 无 | 授权 VPN 访问入口、证书扩展、实际验证边界及回滚 |
+| `docs/FILE_LENGTH_LIMITS.md` | 140 | 90 | 无 | 当前全部文本逐文件登记及清理规则，新增部署记录和回归测试条目 |
 | `docs/MAINTENANCE.md` | 100 | 36 | 无 | 维护周期、触发条件与改进方向，不复制任务状态 |
 | `docs/TODO.md` | 160 | 54 | 无 | 开头保留简短约束，下方只留未完成任务，完成结果转存记录 |
 | `docs/USER_GUIDE.md` | 100 | 95 | 无 | 面向申请者的短操作指南和常见问题 |
@@ -28,11 +38,11 @@
 | `src/compute_control/config.py` | 110 | 59 | 无 | 启动配置加载与校验，说明留在配置文档 |
 | `src/compute_control/db.py` | 180 | 163 | 无 | 首版表结构、连接、事务和基础审计持久化 |
 | `src/compute_control/models.py` | 130 | 114 | 无 | 公共请求的类型和校验规则 |
-| `src/compute_control/remote.py` | 1000 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
+| `src/compute_control/remote.py` | 1100 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
 | `src/compute_control/security.py` | 190 | 138 | 无 | 密码、会话及凭据加密，不混入 HTTP 页面 |
-| `src/compute_control/services.py` | 500 | 498 | 无 | 既有机器、额度、台账业务及重启维护检查；管理操作拆到同职责文件 |
+| `src/compute_control/services.py` | 550 | 498 | 无 | 既有机器、额度、台账业务及重启维护检查；管理操作拆到同职责文件 |
 | `src/compute_control/ssh.py` | 190 | 142 | 无 | 固定指纹及分离 sudo/操作输入协议 |
-| `src/compute_control/static/app.css` | 140 | 126 | 无 | 当前页面布局与响应式样式 |
+| `src/compute_control/static/app.css` | 180 | 126 | 无 | 当前页面布局与响应式样式 |
 | `src/compute_control/static/app.js` | 280 | 258 | 无 | 单控制台交互与 API 调用，无 Linux 命令或业务授权规则 |
 | `src/compute_control/templates/index.html` | 140 | 94 | 无 | 单页入口与操作表单，不含业务脚本 |
 | `src/compute_control/worker.py` | 450 | 402 | 无 | 持久任务、采集调度、密码交接及独立强制重启执行槽 |
@@ -61,7 +71,7 @@
 | `docs/ADMIN_GUIDE.md` | 180 | 158 | 无 | 完整可公开管理员操作说明，直接作为页面弹窗正文 |
 | `docs/DEVELOPMENT_ENVIRONMENT.md` | 60 | 13 | 无 | 工具分层入口及检测边界，清单链接包内唯一数据源 |
 | `docs/records/2026-11-03-admin-management-guides-reboot.md` | 130 | 53 | 无 | 本批授权、实现、验证及交付清理交接，不累加后续无关事项 |
-| `src/compute_control/portal.py` | 260 | 236 | 无 | 本次批准的公告、联系名单、权限申请、开关和历史读取业务，沿用现有数据与任务契约 |
+| `src/compute_control/portal.py` | 300 | 236 | 无 | 公告、联系名单、sudo 权限申请、备注事务删除和历史读取，沿用现有数据与任务契约 |
 | `src/compute_control/portal_api.py` | 120 | 84 | 无 | 新增接口的角色/CSRF 依赖装配，不混入 Linux 实现 |
 | `src/compute_control/static/portal.js` | 150 | 116 | 无 | 公告、联系人、权限申请和账号开关页面，正文来自 API，不存秘密 |
 | `tests/test_portal.py` | 300 | 224 | 无 | 公告/联系/申请权限、小时采集、失败与历史过滤及旧版迁移验证 |
@@ -79,6 +89,26 @@
 | `tests/test_ui_review.py` | 140 | 93 | 无 | 两种角色入口、按钮分组、手动刷新、弹窗和四种屏宽的浏览器复查 |
 | `tests/test_name_matching.py` | 120 | 64 | 无 | 英文姓名大小写、重复/恢复/改名及旧冲突的身份保护回归 |
 | `docs/records/2026-11-04-ui-review-and-public-release.md` | 120 | 51 | 无 | 一次全面检查、界面调整、限频、姓名匹配及公开发布的验收交接 |
+
+| `tests/test_note_deletion.py` | 190 | 112 | 无 | 备注归属、机器可见性、CSRF、审计和真实浏览器删除交互 |
+| `tests/test_illustrated_guides.py` | 150 | 76 | 无 | 分角色 HTML/PDF、路径隔离、CSP、登录退出和真实浏览器教程 |
+| `tests/test_machine_ledger.py` | 120 | 41 | 无 | 按机器分组、跨人员账号归属及 sudo 滑动开关 |
+| `docs/records/2026-11-04-easytier-notes-and-guides.md` | 120 | 35 | 无 | 三机 Docker 组网、备注删除、机器台账、图文教程及部署验收 |
+
+| `src/compute_control/management_passwords.py` | 180 | 111 | 无 | 管理连接凭据的加密候选、远端改密及断线核查，不自动重放 |
+| `src/compute_control/credential_api.py` | 100 | 39 | 无 | 网页与机器管理密码修改、再次认证和角色装配 |
+| `src/compute_control/static/credentials.js` | 100 | 38 | 无 | 两种管理密码表单、确认、核查及关闭清除密码 |
+| `tests/test_management_passwords.py` | 280 | 211 | 无 | 改密认证、加密、并发保护、新连接验证及持久核查 |
+| `tests/test_management_password_ui.py` | 200 | 140 | 无 | 真实浏览器改密表单和固定远端命令、回执及取消墓碑 |
+| `docs/records/2026-11-04-management-passwords.md` | 120 | 30 | 无 | 网页及机器管理改密能力、部署和验证交接 |
+
+| `docs/records/2026-11-04-generic-guides-and-sticky-people.md` | 100 | 27 | 无 | 通用图文教程、可配置参数表述和长名单固定添加入口的验收交接 |
+
+| `deploy/compute-control-https.conf` | 30 | 6 | 无 | 可选 HTTPS 的独立 systemd 启动覆盖示例 |
+| `src/compute_control/static/machine_admin.js` | 110 | 40 | 无 | 单一机器管理入口、分组说明与原有表单路由 |
+| `tests/test_machine_management_ui.py` | 190 | 97 | 无 | 管理弹窗、目标隔离、手机布局、确认取消和待核查入口 |
+| `tests/test_last_active.py` | 180 | 101 | 无 | 账号最近登录时间、机器与人员隔离、旧库回填和持久保留 |
+| `docs/records/2026-11-04-v0.2.0-release.md` | 120 | 40 | 无 | 面向公开发行的传输、界面、活跃时间与隐私验收记录 |
 
 ## 清理时如何使用
 

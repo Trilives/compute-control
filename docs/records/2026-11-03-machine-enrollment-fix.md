@@ -3,7 +3,7 @@
 - 范围：用户已接入一台机器，要求取消管理员手动比对指纹，随后反馈“能力不足不能开放”。关联 [T004](../TODO.md#t004--p1--m2-接入与只读监控)。
 - 指纹：表单移除获取、展示和确认步骤；后台读取首次密钥，使用该指纹完成 SSH/sudo 验证后才落库。验证失败不留机器记录，已有机器更新凭据仍使用原指纹。
 - 接口兼容：机器请求允许不传 `fingerprint`；旧客户端传入该字段仍可解析，但不能覆盖后台观察到的首次指纹或已保存的指纹；旧 probe 接口保留。
-- 原因证据：`Ordin` 原报告无缺失工具，GNU tar、Python 3.12.3、NVIDIA 均可用，但 `local_accounts_only=false`。只读诊断发现 `passwd: files systemd sss`，没有 SSSD 主配置、片段、进程或 NSS 接口，属于仅有配置项的误判。
+- 原因证据：`目标节点` 原报告无缺失工具，GNU tar、Python 3.12.3、NVIDIA 均可用，但 `local_accounts_only=false`。只读诊断发现 `passwd: files systemd sss`，没有 SSSD 主配置、片段、进程或 NSS 接口，属于仅有配置项的误判。
 - 修复：将未启用 `sss` 与实际目录服务区分；活动/已配置 SSSD、LDAP/NIS 等来源仍阻止自动创建。兼容模式没有外部账号包含条目时按本地处理；报告记录账号来源、未启用项及具体阻止原因。
 - 依据：[Linux NSS 手册](https://man7.org/linux/man-pages/man5/nsswitch.conf.5.html)说明来源和 compat 条目的含义；服务是否启用以此次目标机只读证据判断，不仅凭单个来源名推断。
 - 复测：使用新代码通过已有已保存指纹执行只读 inspect，目标机报告 `can_create=true`、`inactive_account_sources=[sss]`、`block_reasons=[]`。仅刷新本地检测缓存，不修改 NSS、SSSD、防火墙或远端用户，不自动开放申请。

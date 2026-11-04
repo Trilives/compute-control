@@ -57,7 +57,7 @@ for path in sorted(root.rglob("*")):
         errors.append(f"末尾换行或 LF 格式错误: {rel}")
     if any(line.rstrip() != line for line in body.splitlines()):
         errors.append(f"行尾空白: {rel}")
-optional = {"docs/private/ADMIN_GUIDE.md"}
+optional = {"docs/private/ADMIN_GUIDE.md", ".env"}
 for rel in limits.keys() - texts.keys() - optional:
     errors.append(f"登记文件缺失: {rel}")
 

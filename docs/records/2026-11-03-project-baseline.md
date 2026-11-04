@@ -4,7 +4,7 @@
 
 ## 项目证据
 
-- 根目录：`/home/ares/Workspace/Server`。
+- 根目录：`<项目工作目录>`。
 - 开始时只有 `ARCHITECTURE.md`、`docs/USER_GUIDE.md`、`docs/private/ADMIN_GUIDE.md` 和 `.gitignore`，分别为 311、66、116、9 行；全部读取后再创建管理文档。
 - `rg --files --hidden --no-ignore -g '!.git/**'` 和目录盘点未发现应用代码、依赖清单、运行配置、测试、CI 或研发任务系统。
 - 当前目录及祖先路径未找到 `AGENTS.md`；`git status --short` 返回 `fatal: not a git repository`，没有可引用的提交、分支或可恢复历史。
