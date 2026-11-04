@@ -93,7 +93,7 @@
 | `tests/test_note_deletion.py` | 190 | 112 | 无 | 备注归属、机器可见性、CSRF、审计和真实浏览器删除交互 |
 | `tests/test_illustrated_guides.py` | 150 | 76 | 无 | 分角色 HTML/PDF、路径隔离、CSP、登录退出和真实浏览器教程 |
 | `tests/test_machine_ledger.py` | 120 | 41 | 无 | 按机器分组、跨人员账号归属及 sudo 滑动开关 |
-| `docs/records/2026-11-04-easytier-notes-and-guides.md` | 120 | 35 | 无 | 三机 Docker 组网、备注删除、机器台账、图文教程及部署验收 |
+| `docs/records/2026-11-04-notes-and-role-guides.md` | 120 | 35 | 无 | 备注删除、机器台账、分角色图文教程及部署验收 |
 
 | `src/compute_control/management_passwords.py` | 180 | 111 | 无 | 管理连接凭据的加密候选、远端改密及断线核查，不自动重放 |
 | `src/compute_control/credential_api.py` | 100 | 39 | 无 | 网页与机器管理密码修改、再次认证和角色装配 |
@@ -109,6 +109,8 @@
 | `tests/test_machine_management_ui.py` | 190 | 97 | 无 | 管理弹窗、目标隔离、手机布局、确认取消和待核查入口 |
 | `tests/test_last_active.py` | 180 | 101 | 无 | 账号最近登录时间、机器与人员隔离、旧库回填和持久保留 |
 | `docs/records/2026-11-04-v0.2.0-release.md` | 120 | 40 | 无 | 面向公开发行的传输、界面、活跃时间与隐私验收记录 |
+
+| `docs/records/2026-11-04-v0.2.1-guide-isolation.md` | 100 | 25 | 无 | Web 通用图文与线下资料的目录隔离、链接拒绝及公开文本检查 |
 
 ## 清理时如何使用
 

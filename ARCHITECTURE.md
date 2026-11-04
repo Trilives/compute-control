@@ -355,7 +355,7 @@ Agent 可在现有职责和已确认计划内自主实现。增加独立职责�
 
 ## 12. 文档与实现交付顺序
 
-公开的架构、[管理员操作指南](docs/ADMIN_GUIDE.md)和[申请者指南](docs/USER_GUIDE.md)独立维护，文字指南随发行包提供。正式模式的图文教程由维护人安装到运行目录 `tutorials/admin.html`、`admin.pdf`、`applicant.html`、`applicant.pdf`；`/api/operation-guide` 返回受保护的 HTML/PDF 入口，服务端仅按实际会话角色选文件，拒绝匿名读取。隔离 iframe 禁止脚本执行，HTML 文档仅允许同源嵌入、内联样式与 data 图片，退出或切换身份清除文档；缺少图文产物时回退文字指南。图文内经授权的 EasyTier 入网信息不进入 Git/公开发行包，控制台管理员凭据单独保管；私密管理员记录仍在 `docs/private/`，实际凭据按第 5 节存储。
+公开的架构、[管理员操作指南](docs/ADMIN_GUIDE.md)和[申请者指南](docs/USER_GUIDE.md)独立维护，文字指南随发行包提供。正式模式的图文教程由维护人安装到运行目录 `web-tutorials/admin.html`、`admin.pdf`、`applicant.html`、`applicant.pdf`；`/api/operation-guide` 返回受保护的 HTML/PDF 入口，服务端仅按实际会话角色选文件，拒绝匿名读取。隔离 iframe 禁止脚本执行，HTML 文档仅允许同源嵌入、内联样式与 data 图片，退出或切换身份清除文档；缺少图文产物时回退文字指南。Web UI 只读取独立的 `web-tutorials` 目录，旧 `tutorials` 或 `internal-tutorials` 中的内部分发资料不作为回退来源。实际凭据和私密维护资料由部署者单独保管，不进入公开发行包。
 
 1. 基础框架：空机器列表、单管理员初始化、姓名名单、默认/个人额度、权限与会话。
 2. 机器接入与只读监控：SSH 能力检测、历史账号展示、小时后台采集、历史折线与不完整统计标记。

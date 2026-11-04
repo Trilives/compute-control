@@ -41,9 +41,9 @@
 
 ## 角色图文指南
 
-内置文字指南随包提供。可在 `<runtime_dir>/tutorials/` 安装自备的 `admin.html`、`admin.pdf`、`applicant.html`、`applicant.pdf`；目录及文件仅允许服务身份读取。
+内置文字指南随包提供。可在 `<runtime_dir>/web-tutorials/` 安装自备的 `admin.html`、`admin.pdf`、`applicant.html`、`applicant.pdf`；目录及文件仅允许服务身份读取。
 
-文件按实际会话角色返回，申请者不能用查询参数读取管理员版，匿名请求被拒绝。HTML 应自包含图片与样式；页面以禁止脚本的 iframe 展示。缺少对应 HTML/PDF 时回退文字指南。管理员登录凭据应单独保管，自备教程中的网络配置由部署者自行确认分发范围。
+文件按实际会话角色返回，申请者不能用查询参数读取管理员版，匿名请求被拒绝。HTML 应自包含图片与样式；页面以禁止脚本的 iframe 展示。缺少对应 HTML/PDF 时回退文字指南。Web UI 通用图文只放操作说明；现场部署和接入资料应另行线下分发，不放在 `web-tutorials`。旧 `tutorials` 和 `internal-tutorials` 不会被 Web UI 自动读取。
 
 ## 升级、备份与回滚
 

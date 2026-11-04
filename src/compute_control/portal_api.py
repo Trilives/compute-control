@@ -20,8 +20,9 @@ def register_portal(app, service, member, admin):
         from .security import DomainError
 
         name = "admin" if current["role"] == "admin" else "applicant"
-        path = service.config.runtime_dir / "tutorials" / (name + suffix)
-        if not path.is_file():
+        root = service.config.runtime_dir / "web-tutorials"
+        path = root / (name + suffix)
+        if root.is_symlink() or path.is_symlink() or not path.is_file():
             raise DomainError("图文教程尚未安装", 404)
         return path
 
@@ -31,7 +32,7 @@ def register_portal(app, service, member, admin):
 
     @app.get("/api/operation-guide/download")
     def tutorial_download(current=Depends(member)):
-        filename = "管理员图文教程.pdf" if current["role"] == "admin" else "申请者图文教程.pdf"
+        filename = "管理员通用教程.pdf" if current["role"] == "admin" else "申请者通用教程.pdf"
         return FileResponse(
             tutorial_path(current, ".pdf"), media_type="application/pdf", filename=filename
         )

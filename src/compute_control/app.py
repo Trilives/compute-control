@@ -263,8 +263,12 @@ def create_app(config=None, remote=None):
             "markdown": source.read_text(),
         }
         name = "admin" if current["role"] == "admin" else "applicant"
-        tutorials = config.runtime_dir / "tutorials"
-        if all((tutorials / (name + suffix)).is_file() for suffix in (".html", ".pdf")):
+        tutorials = config.runtime_dir / "web-tutorials"
+        if not tutorials.is_symlink() and all(
+            (tutorials / (name + suffix)).is_file()
+            and not (tutorials / (name + suffix)).is_symlink()
+            for suffix in (".html", ".pdf")
+        ):
             result.update(
                 format="html",
                 document_url="/api/operation-guide/document",
