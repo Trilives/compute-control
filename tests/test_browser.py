@@ -184,7 +184,7 @@ def test_admin_and_applicant_browser_flow(app):
             page.get_by_role("button", name="用户指南", exact=True).click()
             expect(page.locator("#guide-content")).to_contain_text("申请账号")
             page.locator("#guide-dialog").get_by_role("button", name="关闭", exact=True).click()
-            expect(page.get_by_role("button", name="申请管理权限", exact=True)).to_be_visible()
+            expect(page.get_by_role("button", name="申请 sudo 权限", exact=True)).to_be_visible()
             expect(page.get_by_role("button", name="申请者与额度", exact=True)).to_have_count(0)
             expect(page.get_by_text("还没有可见的机器")).to_be_visible()
             expect(page.get_by_role("button", name="+ 申请账号", exact=True)).to_be_visible()

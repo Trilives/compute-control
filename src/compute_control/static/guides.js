@@ -46,6 +46,7 @@ window.Guides = (() => {
     Dialogs.open('#guide-dialog');
   }
   async function development(systemOnly) {
+    $('#guide-dialog').classList.remove('illustrated-guide');
     const guide = await api('/guides'); $('#guide-title').textContent = systemOnly ? '需要管理员安装的系统依赖' : guide.title;
     const rows = systemOnly ? guide.rows.filter(row => row.level.includes('系统级')) : guide.rows;
     $('#guide-content').replaceChildren(table(['工具', '推荐层级', '说明'], rows.map(row => [row.tool, row.level, row.description])), el('p', guide.system_note, 'muted'));
@@ -53,7 +54,17 @@ window.Guides = (() => {
   }
   async function operation() {
     const guide = await api('/operation-guide'); $('#guide-title').textContent = guide.title;
-    $('#guide-content').replaceChildren(markdown(guide.markdown)); open();
+    $('#guide-dialog').classList.toggle('illustrated-guide', guide.format === 'html');
+    if (guide.format === 'html') {
+      const toolbar = el('div', undefined, 'tutorial-toolbar'), download = el('a', '下载 PDF', 'tutorial-download');
+      download.href = guide.download_url; download.target = '_blank'; download.rel = 'noopener';
+      toolbar.append(el('span', '按目录阅读，或下载保存。', 'muted'), download);
+      const frame = el('iframe'); frame.id = 'operation-guide-frame'; frame.title = guide.title;
+      frame.src = guide.document_url; frame.referrerPolicy = 'no-referrer';
+      frame.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+      $('#guide-content').replaceChildren(toolbar, frame);
+    } else $('#guide-content').replaceChildren(markdown(guide.markdown));
+    open();
   }
   return { development, operation, markdown };
 })();

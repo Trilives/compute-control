@@ -116,7 +116,7 @@ class PortalOperations:
                     item_id,
                 )
         except sqlite3.IntegrityError as exc:
-            raise DomainError("该账号已有待处理的权限申请", 409) from exc
+            raise DomainError("该账号已有待处理的 sudo 权限申请", 409) from exc
         return {"id": item_id}
 
     def decide_permission(self, request_id, action, response):

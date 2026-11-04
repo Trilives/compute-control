@@ -1,7 +1,7 @@
 'use strict';
 const $ = (selector) => document.querySelector(selector);
 const state = { csrf: '', role: 'anonymous', tab: 'machines', machines: [], people: [], mode: 'applicant', showCleared: false };
-const titles = { machines: '当前状态', announcements: '公告', permissions: '权限申请', contacts: '管理员名单', people: '申请者与额度', accounts: '账号台账', jobs: '后台任务', archives: '归档记录', audit: '操作记录' };
+const titles = { machines: '当前状态', announcements: '公告', permissions: 'sudo 权限申请', contacts: '管理员名单', people: '申请者与额度', accounts: '账号台账', jobs: '后台任务', archives: '归档记录', audit: '操作记录' };
 const labels = { active: '可使用', creating: '创建中', waiting_password: '等待重新输入密码', recycle_requested: '回收排队中', archive_failed: '回收暂停，请管理员核查', needs_reconcile: '待核查远端结果', home_cleanup_pending: '账号已删除，原 home 待清理', queued: '排队中', running: '执行中', succeeded: '已完成', cancelled: '已取消', retired: '已回收', not_created: '未创建，额度已释放' };
 let loadRevision = 0;
 function applyTheme(theme) {
@@ -50,7 +50,7 @@ async function boot() {
   loadRevision++;
   const previousRole = state.role;
   const data = await api('/auth/me'); Object.assign(state, data);
-  if (previousRole !== state.role) { ComputeCharts.clear(); state.showCleared = false; }
+  if (previousRole !== state.role) { ComputeCharts.clear(); state.showCleared = false; $('#guide-content').replaceChildren(); $('#guide-dialog').classList.remove('illustrated-guide'); }
   if (state.role === 'anonymous') {
     Dialogs.clearAlerts();
     document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
@@ -112,16 +112,28 @@ async function render(revision) {
     box.append(el('span', '全局默认额度'), input, button('保存默认额度', async () => { await api('/admin/settings/quota', 'PUT', { value: Number(input.value) }); notify('默认额度已更新'); await load(); }));
     content.append(box, state.people.length ? table(['姓名', '状态', '已用 / 上限', '额度来源', '操作'], state.people.map(person => [person.name, person.enabled ? '启用' : '停用', `${person.used} / ${person.effective_quota}`, person.quota === null ? '默认' : '个人设置', personActions(person)])) : empty('尚无登记姓名', '添加姓名后，该人员即可立即申请机器账号。'));
   } else if (state.tab === 'accounts') {
-    content.append(accounts.length ? table(['姓名', '机器 / SSH 地址', '用户名', '状态', '管理员权限', '创建时间', '操作'], accounts.map(account => [account.name, `${account.machine_name} · ${account.host}:${account.port}`, account.username, (labels[account.state] || account.state) + (account.ledger_cleared_at ? '（已清理）' : ''), state.role === 'admin' ? Portal.permissionSwitch(account) : account.is_admin == null ? '未确认' : account.is_admin ? '有' : '无', date(account.created), Portal.accountControls(account)])) : empty('尚无登记账号', '申请后，这里会保存姓名、机器与账号的对应关系。'));
+    renderAccountGroups(accounts, content);
   } else if (state.tab === 'jobs') {
     const jobs = await api('/jobs'); if (revision !== loadRevision) return;
-    content.append(jobs.length ? table(['任务编号', '类型', '阶段', '状态 / 提示', '操作'], jobs.map(job => [job.id, ({ create: '创建账号', retire: '回收账号', cleanup: '清理 home', restore: '恢复登录', reconcile: '核对结果', delete_archive: '删除归档', adopt: '接管账号', set_password: '重设密码', reboot: '重启机器', set_privilege: '变更管理员权限' })[job.kind] || job.kind, job.step, `${labels[job.state] || job.state}${job.error ? ' · ' + job.error : ''}`, job.kind === 'reboot' && state.role === 'admin' && !['boot_verified', 'admin_checked'].includes(job.step) ? button('核查重启', async () => { if (confirm('确认已检查机器当前可用？系统会先测试连接，再解除重启维护状态。')) { await api(`/admin/machines/${job.machine_id}/reboot/check`, 'POST', { confirmed: true }); await load(); } }) : job.state === 'waiting_password' ? button('重新输入密码', () => { $('#password-form').dataset.jobId = job.id; $('#password-form').reset(); Dialogs.open('#password-dialog'); }) : '—'])) : empty('暂无后台任务', '创建与回收任务会在这里显示执行结果。'));
+    content.append(jobs.length ? table(['任务编号', '类型', '阶段', '状态 / 提示', '操作'], jobs.map(job => [job.id, ({ create: '创建账号', retire: '回收账号', cleanup: '清理 home', restore: '恢复登录', reconcile: '核对结果', delete_archive: '删除归档', adopt: '接管账号', set_password: '重设密码', reboot: '重启机器', set_privilege: '变更sudo 权限' })[job.kind] || job.kind, job.step, `${labels[job.state] || job.state}${job.error ? ' · ' + job.error : ''}`, job.kind === 'reboot' && state.role === 'admin' && !['boot_verified', 'admin_checked'].includes(job.step) ? button('核查重启', async () => { if (confirm('确认已检查机器当前可用？系统会先测试连接，再解除重启维护状态。')) { await api(`/admin/machines/${job.machine_id}/reboot/check`, 'POST', { confirmed: true }); await load(); } }) : job.state === 'waiting_password' ? button('重新输入密码', () => { $('#password-form').dataset.jobId = job.id; $('#password-form').reset(); Dialogs.open('#password-dialog'); }) : '—'])) : empty('暂无后台任务', '创建与回收任务会在这里显示执行结果。'));
   } else if (state.tab === 'archives') {
     const rows = await api('/admin/archives'); if (revision !== loadRevision) return; content.append(rows.length ? table(['姓名 / 账号', '机器', '归档路径', '大小', '校验 / 状态', '操作'], rows.map(row => [`${row.name} / ${row.username}`, row.machine_name, row.path, `${(row.size / 1048576).toFixed(1)} MiB`, row.deleted ? '已删除' : row.checksum, row.deleted ? '—' : button('删除归档', async () => { if (confirm(`永久删除 ${row.name} / ${row.username} 的归档？请先完成原 home 清理。此操作不可恢复。`)) { await api(`/admin/archives/${row.id}/delete`, 'POST', { confirmed: true }); notify('归档删除任务已提交'); await load(); } }, 'danger')])) : empty('暂无归档', '归档默认永久保留，记录不会因账号回收而消失。'));
   } else {
     const rows = await api('/admin/audit'); if (revision !== loadRevision) return; content.append(table(['时间', '身份', '动作', '对象', '结果'], rows.map(row => [date(row.ts), row.actor, row.action, row.target, row.result])));
   }
   [...$('#tabs').children].forEach(node => node.classList.toggle('active', node.textContent === titles[state.tab]));
+}
+function renderAccountGroups(accounts, content) {
+  if (!accounts.length) { content.append(empty('尚无登记账号', '申请后，这里按机器保存姓名与账号的对应关系。')); return; }
+  const groups = new Map();
+  for (const account of accounts) { if (!groups.has(account.machine_id)) groups.set(account.machine_id, []); groups.get(account.machine_id).push(account); }
+  for (const rows of [...groups.values()].sort((a, b) => a[0].machine_name.localeCompare(b[0].machine_name, 'zh-CN', { numeric: true }))) {
+    const machine = rows[0], group = el('section', undefined, 'panel account-machine-group'), heading = el('div', undefined, 'account-machine-heading');
+    const title = el('div'); title.append(el('h2', machine.machine_name), el('p', `${machine.host}:${machine.port}`, 'muted'));
+    heading.append(title, el('span', `占用额度 ${rows.filter(account => account.occupies).length} 个 · 台账 ${rows.length} 条`, 'badge')); group.append(heading);
+    group.append(table(['姓名', '用户名', '状态', 'sudo 权限', '创建时间', '操作'], rows.map(account => [account.name, account.username, (labels[account.state] || account.state) + (account.ledger_cleared_at ? '（已清理）' : ''), state.role === 'admin' ? Portal.permissionSwitch(account) : account.is_admin == null ? '未确认' : account.is_admin ? '有' : '无', date(account.created), Portal.accountControls(account)])));
+    content.append(group);
+  }
 }
 function renderMachines(content) {
   if (!state.machines.length) { content.append(empty('还没有可见的机器', state.role === 'admin' ? '从添加第一台机器开始。本机也需要手动添加。' : '管理员尚未开放机器，请联系管理员。')); return; }
@@ -245,15 +257,15 @@ function openMachineInfo(machine, title, content) {
   Dialogs.open('#machine-info-dialog');
 }
 function machineUsers(machine) {
-  return button('机器账号与管理员权限', () => {
+  return button('机器账号与 sudo 权限', () => {
     const users = machine.snapshot?.users || [];
-    const content = table(['账号', '姓名', '管理员权限'], users.map(user => {
+    const content = table(['账号', '姓名', 'sudo 权限'], users.map(user => {
       const account = state.accounts.find(item => item.machine_id === machine.id && item.username === user.username && item.occupies);
       const status = el('div', `${user.is_admin == null ? '未确认' : user.is_admin ? '有' : '无'}`);
       if (user.uid < 1000 || ['root', 'admin', 'nobody', machine.username].includes(user.username)) status.append(el('span', '（受保护账号）'));
-      else if (!account) status.append(button('接管后管理权限', async () => { $('#machine-info-dialog').close(); await AdminAccounts.openAdopt(machine.id, user.username); }));
+      else if (!account) status.append(button('接管后管理 sudo 权限', async () => { $('#machine-info-dialog').close(); await AdminAccounts.openAdopt(machine.id, user.username); }));
       return [user.username, user.is_machine_admin ? '已登记 · 机器管理员' : user.person_name || '无登记', account ? Portal.permissionSwitch(account) : status];
     }));
-    openMachineInfo(machine, '机器账号与管理员权限', users.length ? content : el('p', '当前没有账号快照，请先申请刷新并更新显示。'));
+    openMachineInfo(machine, '机器账号与 sudo 权限', users.length ? content : el('p', '当前没有账号快照，请先申请刷新并更新显示。'));
   });
 }

@@ -1,6 +1,7 @@
 """Additional console routes; existing composition supplies role/CSRF dependencies."""
 
 from fastapi import Depends
+from fastapi.responses import FileResponse, HTMLResponse
 
 from .models import (
     AdminContact,
@@ -15,6 +16,26 @@ from .models import (
 
 
 def register_portal(app, service, member, admin):
+    def tutorial_path(current, suffix):
+        from .security import DomainError
+
+        name = "admin" if current["role"] == "admin" else "applicant"
+        path = service.config.runtime_dir / "tutorials" / (name + suffix)
+        if not path.is_file():
+            raise DomainError("图文教程尚未安装", 404)
+        return path
+
+    @app.get("/api/operation-guide/document")
+    def tutorial_document(current=Depends(member)):
+        return HTMLResponse(tutorial_path(current, ".html").read_text())
+
+    @app.get("/api/operation-guide/download")
+    def tutorial_download(current=Depends(member)):
+        filename = "管理员图文教程.pdf" if current["role"] == "admin" else "申请者图文教程.pdf"
+        return FileResponse(
+            tutorial_path(current, ".pdf"), media_type="application/pdf", filename=filename
+        )
+
     @app.get("/api/announcements")
     def announcements(pinned: bool = False, current=Depends(member)):
         return service.announcements(pinned)

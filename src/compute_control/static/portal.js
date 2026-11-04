@@ -25,11 +25,11 @@ window.Portal = (() => {
   function permissionSwitch(account) {
     const label = el('label', undefined, 'check permission-switch'), input = el('input'); input.type = 'checkbox'; input.setAttribute('role', 'switch');
     input.checked = Boolean(account.is_admin); input.disabled = account.state !== 'active';
-    input.setAttribute('aria-label', `${account.username} 管理员权限`);
-    const hint = el('span', account.is_admin == null ? '权限未确认，可选择开通或关闭' : account.is_admin ? '管理员权限：开' : '管理员权限：关');
+    input.setAttribute('aria-label', `${account.username} sudo 权限`);
+    const hint = el('span', account.is_admin == null ? '权限未确认，可选择开通或关闭' : account.is_admin ? 'sudo 权限：开' : 'sudo 权限：关');
     input.addEventListener('change', async () => {
       const enabled = input.checked;
-      if (!confirm(`确认${enabled ? '开通' : '关闭'} ${account.machine_name} / ${account.username} 的 sudo 管理员权限？`)) { input.checked = Boolean(account.is_admin); return; }
+      if (!confirm(`确认${enabled ? '开通' : '关闭'} ${account.machine_name} / ${account.username} 的 sudo 权限？`)) { input.checked = Boolean(account.is_admin); return; }
       input.disabled = true;
       try { await api(`/admin/accounts/${account.id}/privilege`, 'PUT', { enabled }); notify('权限变更已提交，请在后台任务核对结果'); state.tab = 'jobs'; await load(); }
       catch (error) { input.checked = Boolean(account.is_admin); input.disabled = account.state !== 'active'; notify(error.message, true); }
@@ -82,7 +82,7 @@ window.Portal = (() => {
   }
   function openPermission() {
     const accounts = (state.accounts || []).filter(item => item.state === 'active' && item.occupies);
-    if (!accounts.length) throw new Error('请先申请并开通一个机器账号，再申请管理权限');
+    if (!accounts.length) throw new Error('请先申请并开通一个机器账号，再申请 sudo 权限');
     const form = $('#permission-form'); form.reset();
     form.elements.account_id.replaceChildren(...accounts.map(item => new Option(`${item.machine_name} / ${item.username}`, item.id)));
     Dialogs.open('#permission-dialog');
@@ -99,9 +99,9 @@ window.Portal = (() => {
       text.value = settings.admin_contact || ''; text.rows = 3; text.maxLength = 2000; text.setAttribute('aria-label', '补充联系说明');
       contact.append(el('h2', '补充联系说明'), text, button('保存联系方式', async () => { await api('/admin/settings/contact', 'PUT', { text: text.value }); notify('联系方式已保存'); })); content.append(contact);
     } else {
-      if (state.role === 'applicant') actions.append(button('申请管理权限', openPermission, 'primary'));
+      if (state.role === 'applicant') actions.append(button('申请 sudo 权限', openPermission, 'primary'));
       const items = await api('/permission-requests'); if (revision !== loadRevision) return;
-      content.append(items.length ? table(['姓名 / 账号', '机器', '申请事由', '处理结果', '操作'], items.map(item => [`${item.name} / ${item.username}`, item.machine_name, el('p', item.reason, 'plain-text'), `${requestLabels[item.state]}${item.response ? ' · ' + item.response : ''}${item.job_id ? ' · 任务 ' + item.job_id : ''}`, state.role === 'admin' && item.state === 'pending' ? button('处理申请', () => { const form = $('#permission-decision-form'); form.reset(); form.dataset.requestId = item.id; $('#permission-reason').textContent = item.reason; Dialogs.open('#permission-decision-dialog'); }) : '—'])) : empty('暂无权限申请', '说明事由后，由管理员决定协助安装、授予 sudo 权限或拒绝申请。'));
+      content.append(items.length ? table(['姓名 / 账号', '机器', '申请事由', '处理结果', '操作'], items.map(item => [`${item.name} / ${item.username}`, item.machine_name, el('p', item.reason, 'plain-text'), `${requestLabels[item.state]}${item.response ? ' · ' + item.response : ''}${item.job_id ? ' · 任务 ' + item.job_id : ''}`, state.role === 'admin' && item.state === 'pending' ? button('处理申请', () => { const form = $('#permission-decision-form'); form.reset(); form.dataset.requestId = item.id; $('#permission-reason').textContent = item.reason; Dialogs.open('#permission-decision-dialog'); }) : '—'])) : empty('暂无sudo 权限申请', '说明事由后，由管理员决定协助安装、授予 sudo 权限或拒绝申请。'));
     }
   }
   function openContact(item) {
@@ -117,7 +117,7 @@ window.Portal = (() => {
     onSubmit('#announcement-form', async form => { await api('/admin/announcements', 'POST', { title: form.elements.title.value, content: form.elements.content.value, pinned: form.elements.pinned.checked }); $('#announcement-dialog').close(); await load(); });
     onSubmit('#contact-form', async form => { const id = form.dataset.contactId; await api('/admin/contacts' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', { name: form.elements.name.value, contact: form.elements.contact.value }); $('#contact-dialog').close(); await load(); });
     onSubmit('#permission-form', async form => { await api('/permission-requests', 'POST', { account_id: form.elements.account_id.value, reason: form.elements.reason.value }); $('#permission-dialog').close(); state.tab = 'permissions'; await load(); });
-    onSubmit('#permission-decision-form', async form => { const action = form.elements.action.value; if (action === 'grant' && !confirm('确认向申请账号授予 sudo 管理员权限？')) return; await api(`/admin/permission-requests/${form.dataset.requestId}/decision`, 'POST', { action, response: form.elements.response.value }); $('#permission-decision-dialog').close(); await load(); });
+    onSubmit('#permission-decision-form', async form => { const action = form.elements.action.value; if (action === 'grant' && !confirm('确认向申请账号授予 sudo 权限？')) return; await api(`/admin/permission-requests/${form.dataset.requestId}/decision`, 'POST', { action, response: form.elements.response.value }); $('#permission-decision-dialog').close(); await load(); });
   }
   return { initialize, pinned, render, openContacts, permissionSwitch, ledgerControls, accountControls, notesButton, machineAccountCount, updateAccountMachineLabels };
 })();

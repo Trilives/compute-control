@@ -82,6 +82,11 @@ def create_app(config=None, remote=None):
             "default-src 'self'; style-src 'self'; script-src 'self'; "
             "frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
         )
+        if request.url.path == "/api/operation-guide/document" and response.status_code == 200:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; img-src data:; style-src 'unsafe-inline'; "
+                "frame-ancestors 'self'; form-action 'none'; base-uri 'none'"
+            )
         return response
 
     def session(request: Request):
@@ -250,10 +255,19 @@ def create_app(config=None, remote=None):
         source = PACKAGE / "guides" / filename
         if not source.exists():
             source = PACKAGE.parent.parent / "docs" / filename
-        return {
+        result = {
             "title": "管理员指南" if current["role"] == "admin" else "用户指南",
             "markdown": source.read_text(),
         }
+        name = "admin" if current["role"] == "admin" else "applicant"
+        tutorials = config.runtime_dir / "tutorials"
+        if all((tutorials / (name + suffix)).is_file() for suffix in (".html", ".pdf")):
+            result.update(
+                format="html",
+                document_url="/api/operation-guide/document",
+                download_url="/api/operation-guide/download",
+            )
+        return result
 
     @app.get("/api/machines")
     def machines(current=Depends(member)):

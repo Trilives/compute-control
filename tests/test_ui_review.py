@@ -38,7 +38,7 @@ def test_navigation_buttons_and_responsive_dialogs(app, live_page, role):
         page.locator("#login-name").fill("张三")
     page.locator("#login-form button[type=submit]").click()
     expect(page.locator(".machine-grid > article")).to_have_count(3)
-    tabs = ["当前状态", "账号台账", "权限申请", "后台任务"]
+    tabs = ["当前状态", "账号台账", "sudo 权限申请", "后台任务"]
     if role == "admin":
         tabs += ["申请者与额度"]
     tabs += ["公告"]
