@@ -204,7 +204,8 @@ function openAccount(machineId) {
   const available = state.machines.filter(machine => machine.available && (state.role === 'admin' || !applicationBlocker(machine)));
   if (!available.length) throw new Error('当前没有开放申请的机器，请联系管理员');
   if (machineId && !available.some(machine => machine.id === machineId)) throw new Error('该机器当前不可申请，请刷新后重试');
-  const form = $('#account-form'); form.reset(); form.dataset.requestKey = crypto.randomUUID();
+  const form = $('#account-form'); form.reset();
+  form.dataset.requestKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2, '0')).join('');
   form.elements.machine_id.replaceChildren(...available.map(machine => new Option(machine.name, machine.id)));
   if (machineId) form.elements.machine_id.value = machineId;
   form.elements.person_id.replaceChildren(...state.people.filter(person => person.enabled).map(person => new Option(person.name, person.id)));
