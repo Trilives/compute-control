@@ -6,6 +6,7 @@ import getpass
 import os
 import signal
 import threading
+from dataclasses import replace
 
 from .config import Config
 from .db import Database
@@ -50,10 +51,16 @@ def main():
         elif args.command == "serve":
             if bool(args.ssl_certfile) != bool(args.ssl_keyfile):
                 raise DomainError("TLS 证书和私钥必须同时提供")
+            if config.https_enabled is False and args.ssl_certfile:
+                raise DomainError("HTTPS 未启用；使用证书时请设置 https_enabled=true")
             if config.allow_insecure_http and (args.ssl_certfile or args.ssl_keyfile):
                 raise DomainError("allow_insecure_http=true 时不能同时指定 TLS 证书")
             if config.secure_cookie and not (args.ssl_certfile and args.ssl_keyfile):
-                raise DomainError("生产模式必须提供 --ssl-certfile 和 --ssl-keyfile")
+                raise DomainError(
+                    "生产模式必须提供 TLS 证书，或明确设置 https_enabled=false 使用 HTTP"
+                )
+            if args.ssl_certfile:
+                config = replace(config, https_enabled=True)
             import uvicorn
 
             from .app import create_app

@@ -61,6 +61,7 @@ def test_admin_and_applicant_browser_flow(app):
                 form.locator(f"input[name={field}]").fill(value)
             form.locator("button[type=submit]").click()
             expect(page.get_by_role("heading", name="浏览器测试节点")).to_be_visible()
+            page.get_by_role("button", name="管理机器", exact=True).click()
             page.get_by_role("button", name="更新凭据").click()
             form.locator("input[name=ssh_password]").fill("updated-example-password")
             form.locator("input[name=sudo_password]").fill("updated-example-password")
@@ -127,6 +128,7 @@ def test_admin_and_applicant_browser_flow(app):
                 dialog.accept() if len(confirmations) == 1 else dialog.dismiss()
 
             page.on("dialog", reboot_confirmation)
+            page.get_by_role("button", name="管理机器", exact=True).click()
             page.get_by_role("button", name="重启机器", exact=True).click()
             page.wait_for_function(
                 '() => !document.querySelector("#notice")?.textContent.includes("重启指令已提交")'

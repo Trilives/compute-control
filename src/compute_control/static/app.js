@@ -76,7 +76,7 @@ async function boot() {
 function metric(label, value) { const node = el('div', undefined, 'metric'); node.append(el('span', label), el('strong', value)); return node; }
 async function load() {
   if (state.role === 'anonymous') return;
-  $('#machine-info-dialog').close();
+  $('#machine-info-dialog').close(); $('#machine-management-dialog').close();
   const revision = ++loadRevision, role = state.role;
   const machines = await api('/machines');
   const people = role === 'admin' ? await api('/admin/applicants') : null;
@@ -171,12 +171,11 @@ function renderMachines(content) {
     if (tools) {
       actions.append(button(`系统开发工具 ${tools.filter(tool => tool.installed).length} / ${tools.length} 项可用`, () => openMachineInfo(machine, '系统开发工具', table(['工具', '状态', '版本', '路径'], tools.map(tool => [tool.name, tool.installed ? '已安装' : '未检测到系统级安装', tool.version, tool.path])))));
     }
-    if (state.role === 'admin') actions.append(machineUsers(machine));
     card.append(actions);
     if (state.role === 'admin') {
       const management = el('div', undefined, 'actions machine-management');
       management.setAttribute('aria-label', '机器管理操作');
-      management.append(button(machine.available ? '关闭申请' : '开放申请', async () => { await api(`/admin/machines/${machine.id}`, 'PATCH', { available: !machine.available }); await load(); }), button('更新凭据', () => openMachine(machine)), Credentials.machineButton(machine), button('重启机器', () => AdminAccounts.reboot(machine), 'danger'));
+      management.append(button('管理机器', () => MachineAdmin.open(machine)));
       card.append(management);
     }
     card.append(ComputeCharts.details(machine)); grid.append(card);
@@ -249,7 +248,7 @@ onSubmit('#password-form', async form => { await api(`/jobs/${form.dataset.jobId
 $('#development-guide').addEventListener('click', () => Guides.development(false).catch(error => notify(error.message, true)));
 $('#operation-guide').addEventListener('click', () => Guides.operation().catch(error => notify(error.message, true)));
 new ResizeObserver(() => document.documentElement.style.setProperty('--topbar-height', `${$('.topbar').getBoundingClientRect().height}px`)).observe($('.topbar'));
-AdminAccounts.initialize(); Portal.initialize(); Credentials.initialize();
+AdminAccounts.initialize(); Portal.initialize(); Credentials.initialize(); MachineAdmin.initialize();
 boot().catch(error => notify(error.message, true));
 
 function openMachineInfo(machine, title, content) {
@@ -257,16 +256,14 @@ function openMachineInfo(machine, title, content) {
   $('#machine-info-content').replaceChildren(content);
   Dialogs.open('#machine-info-dialog');
 }
-function machineUsers(machine) {
-  return button('机器账号与 sudo 权限', () => {
-    const users = machine.snapshot?.users || [];
-    const content = table(['账号', '姓名', 'sudo 权限'], users.map(user => {
-      const account = state.accounts.find(item => item.machine_id === machine.id && item.username === user.username && item.occupies);
-      const status = el('div', `${user.is_admin == null ? '未确认' : user.is_admin ? '有' : '无'}`);
-      if (user.uid < 1000 || ['root', 'admin', 'nobody', machine.username].includes(user.username)) status.append(el('span', '（受保护账号）'));
-      else if (!account) status.append(button('接管后管理 sudo 权限', async () => { $('#machine-info-dialog').close(); await AdminAccounts.openAdopt(machine.id, user.username); }));
-      return [user.username, user.is_machine_admin ? '已登记 · 机器管理员' : user.person_name || '无登记', account ? Portal.permissionSwitch(account) : status];
-    }));
-    openMachineInfo(machine, '机器账号与 sudo 权限', users.length ? content : el('p', '当前没有账号快照，请先申请刷新并更新显示。'));
-  });
+function openMachineUsers(machine) {
+  const users = machine.snapshot?.users || [];
+  const content = table(['账号', '姓名', 'sudo 权限'], users.map(user => {
+    const account = state.accounts.find(item => item.machine_id === machine.id && item.username === user.username && item.occupies);
+    const status = el('div', `${user.is_admin == null ? '未确认' : user.is_admin ? '有' : '无'}`);
+    if (user.uid < 1000 || ['root', 'admin', 'nobody', machine.username].includes(user.username)) status.append(el('span', '（受保护账号）'));
+    else if (!account) status.append(button('接管后管理 sudo 权限', async () => { $('#machine-info-dialog').close(); await AdminAccounts.openAdopt(machine.id, user.username); }));
+    return [user.username, user.is_machine_admin ? '已登记 · 机器管理员' : user.person_name || '无登记', account ? Portal.permissionSwitch(account) : status];
+  }));
+  openMachineInfo(machine, '机器账号与 sudo 权限', users.length ? content : el('p', '当前没有账号快照，请先申请刷新并更新显示。'));
 }

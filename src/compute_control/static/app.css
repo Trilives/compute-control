@@ -138,3 +138,9 @@ dialog[open] { display: flex; flex-direction: column; }
 @media (max-width: 650px) { .section-head { flex-wrap: wrap; } #page-actions { justify-content: flex-start; } .machine-grid .panel { overflow-wrap: anywhere; } }
 .people-controls { position: sticky; top: calc(var(--topbar-height, 76px) + 8px); z-index: 2; align-items: center; padding: 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 4px 12px #0001; }
 .people-controls input { width: 120px; margin: 0; } .people-controls .primary { margin-left: auto; }
+#machine-management-dialog { width: min(720px, 94vw); }
+.admin-action-group + .admin-action-group { margin-top: 22px; } .admin-action-group h3 { margin: 0 0 10px; font-size: 14px; }
+.admin-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.admin-action { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; text-align: left; padding: 15px; min-width: 0; white-space: normal; }
+.admin-action span { font-size: 12px; line-height: 1.6; color: var(--muted); } .admin-danger-group { border-top: 1px solid var(--line); padding-top: 18px; }
+@media (max-width: 650px) { .admin-action-grid { grid-template-columns: minmax(0, 1fr); } }

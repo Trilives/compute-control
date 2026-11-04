@@ -10,6 +10,7 @@ from pathlib import Path
 class Config:
     mode: str = "development"
     allow_insecure_http: bool = False
+    https_enabled: bool | None = None
     host: str = "127.0.0.1"
     port: int = 8443
     runtime_dir: Path = Path("runtime")
@@ -21,6 +22,8 @@ class Config:
 
     @property
     def secure_cookie(self):
+        if self.https_enabled is not None:
+            return self.https_enabled
         return self.mode == "production" and not self.allow_insecure_http
 
     @classmethod
@@ -40,6 +43,10 @@ class Config:
         config = cls(**data)
         if type(config.allow_insecure_http) is not bool:
             raise ValueError("allow_insecure_http 必须为布尔值")
+        if config.https_enabled is not None and type(config.https_enabled) is not bool:
+            raise ValueError("https_enabled 必须为布尔值")
+        if config.https_enabled is True and config.allow_insecure_http:
+            raise ValueError("https_enabled=true 不能与 allow_insecure_http=true 同时使用")
         if config.mode not in ("development", "production"):
             raise ValueError("mode 必须为 development 或 production")
         if not isinstance(config.host, str) or not config.host:

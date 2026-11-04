@@ -43,7 +43,7 @@ def create_app(config=None, remote=None):
     config = config or Config.load()
     cookie_name = (
         "cc_session_http"
-        if config.mode == "production" and config.allow_insecure_http
+        if config.mode == "production" and not config.secure_cookie
         else "cc_session"
     )
     db = Database(config.runtime_dir)

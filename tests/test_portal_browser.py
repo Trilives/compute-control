@@ -103,9 +103,10 @@ def test_pinned_login_contact_requests_admin_decision_and_collapsible_comparison
     page.get_by_role("button", name="账号台账", exact=True).click()
     expect(page.get_by_role("switch", name="researcher sudo 权限", exact=True)).to_have_count(1)
     page.get_by_role("button", name="当前状态", exact=True).click()
-    account_buttons = page.get_by_role("button", name="机器账号与 sudo 权限", exact=True)
+    account_buttons = page.get_by_role("button", name="管理机器", exact=True)
     expect(account_buttons).to_have_count(2)
     account_buttons.nth(0).click()
+    page.get_by_role("button", name="机器账号与 sudo 权限", exact=True).click()
     expect(page.locator("#machine-info-title")).to_have_text(
         targets[0]["name"] + " · 机器账号与 sudo 权限"
     )

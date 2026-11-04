@@ -1,6 +1,6 @@
-# Development defaults; production requires TLS unless HTTP is explicitly enabled.
+# Local defaults. Set https_enabled=true and supply both certificate paths for HTTPS.
 mode = "development"
-allow_insecure_http = false
+https_enabled = false
 host = "127.0.0.1"
 port = 8443
 runtime_dir = "runtime"
