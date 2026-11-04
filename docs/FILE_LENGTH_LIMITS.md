@@ -13,7 +13,7 @@
 | `docs/CONFIGURATION.md` | 100 | 33 | 无 | 逐项配置及秘密供应，避免混入产品指南 |
 | `docs/FILE_LENGTH_LIMITS.md` | 100 | 90 | 无 | 当前全部文本逐文件登记及清理规则，新文件增加条目 |
 | `docs/MAINTENANCE.md` | 100 | 36 | 无 | 维护周期、触发条件与改进方向，不复制任务状态 |
-| `docs/TODO.md` | 160 | 60 | 无 | 开头保留简短约束，下方只留未完成任务，完成结果转存记录 |
+| `docs/TODO.md` | 160 | 54 | 无 | 开头保留简短约束，下方只留未完成任务，完成结果转存记录 |
 | `docs/USER_GUIDE.md` | 100 | 95 | 无 | 面向申请者的短操作指南和常见问题 |
 | `docs/VERIFICATION.md` | 170 | 123 | 无 | 包含当前环境证据和可直接执行的文档检查命令 |
 | `docs/private/ADMIN_GUIDE.md` | 100 | 51 | 无 | 只保存私密部署与凭据记录，完整操作链接公开管理员指南 |
@@ -78,7 +78,7 @@
 
 | `tests/test_ui_review.py` | 140 | 93 | 无 | 两种角色入口、按钮分组、手动刷新、弹窗和四种屏宽的浏览器复查 |
 | `tests/test_name_matching.py` | 120 | 64 | 无 | 英文姓名大小写、重复/恢复/改名及旧冲突的身份保护回归 |
-| `docs/records/2026-11-04-ui-review-and-public-release.md` | 120 | 45 | 无 | 一次全面检查、界面调整、限频、姓名匹配及公开发布的验收交接 |
+| `docs/records/2026-11-04-ui-review-and-public-release.md` | 120 | 51 | 无 | 一次全面检查、界面调整、限频、姓名匹配及公开发布的验收交接 |
 
 ## 清理时如何使用
 

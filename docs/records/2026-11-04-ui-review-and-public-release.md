@@ -42,4 +42,10 @@
 
 版本为 `v0.1.0`，目标仓库为 [Trilives/compute-control](https://github.com/Trilives/compute-control)，[Release](https://github.com/Trilives/compute-control/releases/tag/v0.1.0) 提供 wheel、源代码发行包及 SHA-256 校验文件。首次公开提交包含经检查的完整项目源码和文档，实际私密管理员指南须由人类另行保存。
 
-发布状态在发布后补记。不将开发环境通过等同于生产部署完成；目标机实际创建/SSH 登录、回收/PAM、发行版差异及正式 TLS/防火墙/迁移验收仍见 [Todo](../TODO.md)。下次项目清理触发点为 M2 验收、正式部署迁移或连续开发满一个月，以先到者为准。开源许可证尚未选择，本次不代替人类授权代码许可。
+已发布：仓库可见性为 PUBLIC，Release 非草稿，三个附件均已上传；标签指向[已验证的发布提交 a3a0a6c](https://github.com/Trilives/compute-control/commit/a3a0a6c263302d5ae0a7a16b458f5ab5a0b25689)。本节完成记录随后单独以文档提交回填，发行附件保持对应标签的已验证内容。T009 已完成，从 Todo 移除，交接证据保留于本文。
+
+- `gh release download v0.1.0 --repo Trilives/compute-control --dir runtime/release-download` 下载三个附件，逐字节与本机发行文件一致；在该目录运行 `sha256sum -c SHA256SUMS`，wheel 与 sdist 均 OK。
+- 未携带认证的 HTTP 请求验证仓库主页、Release 页面和标签下 raw README 均可访问，README 与发布内容一致；远端源码树共 71 个文件，不含私密/运行目录。匿名 GitHub API 因共享来源限额返回 403，已采用匿名网页/raw 内容验证公开访问，源码树使用已认证 API 核查。
+- 现有全局 pre-push 未识别系统 Python 的 pytest，提示跳过；本项目使用 uv 锁定环境，完整测试已显式执行并记录，未关闭或改写 Git hooks。
+
+正式部署与目标机实际创建/SSH 登录、回收/PAM、发行版差异及 TLS/防火墙/迁移验收仍见 [Todo](../TODO.md)。下次项目清理触发点为 M2 验收、正式部署迁移或连续开发满一个月，以先到者为准。开源许可证尚未选择，本次不代替人类授权代码许可。
