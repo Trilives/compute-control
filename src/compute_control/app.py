@@ -40,6 +40,11 @@ PACKAGE = Path(__file__).parent
 
 def create_app(config=None, remote=None):
     config = config or Config.load()
+    cookie_name = (
+        "cc_session_http"
+        if config.mode == "production" and config.allow_insecure_http
+        else "cc_session"
+    )
     db = Database(config.runtime_dir)
     vault = Secrets(config.runtime_dir)
     auth = Auth(db, config)
@@ -80,7 +85,7 @@ def create_app(config=None, remote=None):
         return response
 
     def session(request: Request):
-        value = auth.session(request.cookies.get("cc_session"))
+        value = auth.session(request.cookies.get(cookie_name))
         if not value:
             raise DomainError("会话已过期，请重新进入", 401)
         if request.method != "GET":
@@ -101,7 +106,7 @@ def create_app(config=None, remote=None):
 
     def attach_cookie(response, token):
         response.set_cookie(
-            "cc_session",
+            cookie_name,
             token,
             max_age=config.session_seconds,
             httponly=True,
@@ -121,10 +126,10 @@ def create_app(config=None, remote=None):
 
     @app.get("/api/auth/me")
     def me(request: Request):
-        value = auth.session(request.cookies.get("cc_session"))
+        value = auth.session(request.cookies.get(cookie_name))
         token = None
         if not value:
-            token, value = auth.issue(previous=request.cookies.get("cc_session"))
+            token, value = auth.issue(previous=request.cookies.get(cookie_name))
         data = {key: value.get(key) for key in ["role", "person_id", "csrf", "name"]}
         data["initialized"] = db.one("SELECT id FROM admin") is not None
         if value["role"] == "applicant":
@@ -154,14 +159,14 @@ def create_app(config=None, remote=None):
                 },
                 status_code=401,
             )
-        token, value = auth.issue(data.role, person_id, request.cookies.get("cc_session"))
+        token, value = auth.issue(data.role, person_id, request.cookies.get(cookie_name))
         with db.connect(write=True) as conn:
             db.audit(conn, actor(value), "session.login", data.role)
         return attach_cookie(JSONResponse({"role": data.role, "csrf": value["csrf"]}), token)
 
     @app.post("/api/auth/logout")
     def logout(request: Request, current=Depends(session)):
-        token, value = auth.issue(previous=request.cookies.get("cc_session"))
+        token, value = auth.issue(previous=request.cookies.get(cookie_name))
         return attach_cookie(JSONResponse({"role": "anonymous", "csrf": value["csrf"]}), token)
 
     @app.get("/api/admin/applicants")
