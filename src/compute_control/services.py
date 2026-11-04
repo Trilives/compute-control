@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 
 from .account_admin import AccountAdministration
 from .db import encode
+from .management_passwords import ManagementPasswords
 from .portal import PortalOperations
 from .security import DomainError, validate_password
 
@@ -35,7 +36,7 @@ def capability_reasons(capabilities):
     return reasons or ["能力报告未通过，请重新检测"]
 
 
-class Service(AccountAdministration, PortalOperations):
+class Service(AccountAdministration, PortalOperations, ManagementPasswords):
     def __init__(self, db, secrets, remote, config):
         self.db, self.secrets, self.remote, self.config = db, secrets, remote, config
 
@@ -106,7 +107,15 @@ class Service(AccountAdministration, PortalOperations):
             )
             params = (session["person_id"],)
         rows = self.db.all(sql + " ORDER BY name", params)
+        pending = {
+            item["machine_id"]
+            for item in self.db.all(
+                "SELECT machine_id FROM machine_password_changes WHERE state='pending'"
+            )
+        }
         for row in rows:
+            if session["role"] == "admin":
+                row["management_password_pending"] = row["id"] in pending
             for secret in ["credentials", "host_key"]:
                 row.pop(secret)
             row["capabilities"] = json.loads(row["capabilities"])
@@ -438,6 +447,7 @@ class Service(AccountAdministration, PortalOperations):
         if report["identity"] != machine["identity"]:
             raise DomainError("更新后的机器身份不符，不能替换原机器")
         with self.db.connect(write=True) as conn:
+            self.guard_reboot(conn, machine_id)
             conn.execute(
                 "UPDATE machines SET name=?,host=?,port=?,username=?,fingerprint=?,archive_root=?,credentials=?,available=?,capabilities=? WHERE id=?",
                 tuple(

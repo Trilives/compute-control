@@ -65,6 +65,7 @@ async function boot() {
   $('#login-form button[type=submit]').disabled = false; $('#admin-entry').disabled = false;
   if (state.role === 'anonymous' && (previousRole !== 'anonymous' || state.mode !== 'applicant')) selectMode('applicant');
   if (state.role !== 'anonymous') {
+    if (state.role === 'admin') $('#identity').append(Credentials.webButton());
     $('#identity').append(el('span', state.role === 'admin' ? '管理员' : data.name), button('退出', async () => { await api('/auth/logout', 'POST'); await boot(); }));
     $('#role-label').textContent = state.role === 'admin' ? 'ADMIN WORKSPACE' : 'APPLICANT WORKSPACE';
     $('#login-form').hidden = true;
@@ -176,7 +177,7 @@ function renderMachines(content) {
     if (state.role === 'admin') {
       const management = el('div', undefined, 'actions machine-management');
       management.setAttribute('aria-label', '机器管理操作');
-      management.append(button(machine.available ? '关闭申请' : '开放申请', async () => { await api(`/admin/machines/${machine.id}`, 'PATCH', { available: !machine.available }); await load(); }), button('更新凭据', () => openMachine(machine)), button('重启机器', () => AdminAccounts.reboot(machine), 'danger'));
+      management.append(button(machine.available ? '关闭申请' : '开放申请', async () => { await api(`/admin/machines/${machine.id}`, 'PATCH', { available: !machine.available }); await load(); }), button('更新凭据', () => openMachine(machine)), Credentials.machineButton(machine), button('重启机器', () => AdminAccounts.reboot(machine), 'danger'));
       card.append(management);
     }
     card.append(ComputeCharts.details(machine)); grid.append(card);
@@ -248,7 +249,7 @@ onSubmit('#account-form', async form => { const data = Object.fromEntries(new Fo
 onSubmit('#password-form', async form => { await api(`/jobs/${form.dataset.jobId}/password`, 'POST', { password: form.elements.password.value }); form.reset(); $('#password-dialog').close(); await load(); });
 $('#development-guide').addEventListener('click', () => Guides.development(false).catch(error => notify(error.message, true)));
 $('#operation-guide').addEventListener('click', () => Guides.operation().catch(error => notify(error.message, true)));
-AdminAccounts.initialize(); Portal.initialize();
+AdminAccounts.initialize(); Portal.initialize(); Credentials.initialize();
 boot().catch(error => notify(error.message, true));
 
 function openMachineInfo(machine, title, content) {

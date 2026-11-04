@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS machines (
  identity TEXT, capabilities TEXT NOT NULL, error TEXT, sampled REAL,
  snapshot TEXT, log_sampled REAL, refresh_requested REAL, last_probe REAL, UNIQUE(host, port));
 CREATE UNIQUE INDEX IF NOT EXISTS machine_identity ON machines(identity) WHERE identity IS NOT NULL;
+CREATE TABLE IF NOT EXISTS machine_password_changes (
+ machine_id TEXT PRIMARY KEY REFERENCES machines(id), id TEXT UNIQUE NOT NULL,
+ credentials TEXT, state TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS accounts (
  id TEXT PRIMARY KEY, person_id TEXT NOT NULL REFERENCES applicants(id),
  machine_id TEXT NOT NULL REFERENCES machines(id), username TEXT NOT NULL,

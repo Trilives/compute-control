@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .config import Config
+from .credential_api import register_credentials
 from .db import Database
 from .models import (
     AccountRequest,
@@ -120,6 +121,8 @@ def create_app(config=None, remote=None):
             path="/",
         )
         return response
+
+    register_credentials(app, service, auth, admin, attach_cookie)
 
     @app.get("/")
     def index(request: Request):

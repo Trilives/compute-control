@@ -58,7 +58,7 @@ def test_navigation_buttons_and_responsive_dialogs(app, live_page, role):
     expect(page.locator(".machine-grid > article")).to_have_count(3)
     if role == "admin":
         expect(page.locator(".machine-management").first.locator("button")).to_have_text(
-            ["关闭申请", "更新凭据", "重启机器"]
+            ["关闭申请", "更新凭据", "修改机器管理密码", "重启机器"]
         )
         page.get_by_role("button", name="更新凭据", exact=True).first.click()
         expect(page.locator("#machine-dialog .dialog-heading")).to_contain_text("更新机器与凭据")

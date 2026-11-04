@@ -72,6 +72,12 @@ class Password(Input):
     password: SecretStr
 
 
+class ManagementPassword(Input):
+    current_password: SecretStr = Field(max_length=256)
+    new_password: SecretStr = Field(max_length=256)
+    confirm_password: SecretStr = Field(max_length=256)
+
+
 class Confirm(Input):
     confirmed: bool
 

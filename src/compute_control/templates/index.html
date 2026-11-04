@@ -9,6 +9,7 @@
   <script src="/static/charts.js" defer></script>
   <script src="/static/guides.js" defer></script>
   <script src="/static/admin.js" defer></script>
+  <script src="/static/credentials.js" defer></script>
   <script src="/static/portal.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
@@ -44,6 +45,21 @@
     <label>归档根目录<input name="archive_root" value="/var/lib/compute-control/archives" required></label>
     <label class="check"><input name="available" type="checkbox">能力检查通过后开放申请</label>
     <footer><button type="button" data-close>取消</button><button class="primary" type="submit">检查并添加</button></footer>
+  </form></dialog>
+  <dialog id="web-password-dialog"><form id="web-password-form"><h2>修改网页管理密码</h2>
+    <label>当前网页管理密码<input name="current_password" type="password" required maxlength="256" autocomplete="current-password"></label>
+    <label>新网页管理密码（至少 12 个字符）<input name="new_password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>
+    <label>再次输入新密码<input name="confirm_password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>
+    <p class="muted">修改成功后，所有网页管理员会话退出，请使用新密码重新登录。</p>
+    <footer><button class="primary" type="submit">修改网页管理密码</button></footer>
+  </form></dialog>
+  <dialog id="management-password-dialog"><form id="management-password-form"><h2 id="management-password-title">修改机器管理密码</h2>
+    <p id="management-password-target" class="muted"></p>
+    <label>当前网页管理密码<input name="current_password" type="password" required maxlength="256" autocomplete="current-password"></label>
+    <label>新机器管理密码（至少 3 个字符）<input name="new_password" type="password" required minlength="3" maxlength="256" autocomplete="new-password"></label>
+    <label>再次输入新密码<input name="confirm_password" type="password" required minlength="3" maxlength="256" autocomplete="new-password"></label>
+    <p class="muted">实际修改此机器 SSH 管理账号的登录密码，并验证新连接后同步系统凭据。sudo 与 SSH 原先同密码时同步修改；免密及独立 sudo 密码保持原设置。</p>
+    <footer><button class="primary" type="submit">修改并验证连接</button></footer>
   </form></dialog>
   <dialog id="person-dialog"><form id="person-form"><h2>维护申请者</h2>
     <label>登记姓名<input name="name" required maxlength="80"></label>

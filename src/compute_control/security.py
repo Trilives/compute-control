@@ -136,3 +136,34 @@ class Auth:
     def successful_attempt(self, ip, timestamp):
         with self.db.connect(write=True) as conn:
             conn.execute("DELETE FROM login_attempts WHERE ip=? AND ts=?", (ip, timestamp))
+
+    def confirm_password(self, password, ip):
+        record = self.db.one("SELECT * FROM admin")
+        try:
+            self.login("admin", record["username"], password, ip)
+        except DomainError as exc:
+            if exc.status == 401:
+                raise DomainError("当前网页管理密码不正确") from exc
+            raise
+        return record["password_hash"]
+
+    def change_password(self, session, current_password, password, ip):
+        validate_password(password)
+        expected = self.confirm_password(current_password, ip)
+        if password == current_password:
+            raise DomainError("新密码不能与当前密码相同")
+        replacement = HASHER.hash(password)
+        with self.db.connect(write=True) as conn:
+            active = conn.execute(
+                "SELECT role FROM sessions WHERE token_hash=? AND expires>?",
+                (session["token_hash"], time.time()),
+            ).fetchone()
+            if not active or active["role"] != "admin":
+                raise DomainError("会话已过期，请重新进入", 401)
+            changed = conn.execute(
+                "UPDATE admin SET password_hash=? WHERE password_hash=?", (replacement, expected)
+            ).rowcount
+            if not changed:
+                raise DomainError("密码已在其他窗口修改，请重新登录", 409)
+            conn.execute("DELETE FROM sessions WHERE role='admin'")
+            self.db.audit(conn, "admin", "admin.password.change", "admin")

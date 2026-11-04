@@ -801,6 +801,53 @@ def set_password(payload):
     }
 
 
+def management_password_status(payload):
+    change_id = payload["change_id"]
+    if not re.fullmatch("[0-9a-f]{32}", change_id):
+        raise Refuse("密码变更标识非法")
+    path = safe_directory("/var/lib/compute-control/jobs", True) / (
+        "management-" + change_id + ".json"
+    )
+    if not path.exists() and payload.get("cancel_if_not_started"):
+        # Runs under machine.lock: tombstone an unsent request before any late packet executes it.
+        atomic_json(path, {"state": "cancelled"})
+    return json.loads(path.read_text()) if path.exists() else {"state": "unknown"}
+
+
+def management_password(payload):
+    name, password = payload["admin_username"], payload.get("password", "")
+    if not 3 <= len(password) <= 256 or any(char in password for char in "\n\r\x00:"):
+        raise Refuse("密码至少 3 字符，不能含换行、NUL 或冒号")
+    local, user = local_user(name), user_exists(name)
+    if (
+        not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_-]{0,63}", name)
+        or not local
+        or not user
+        or int(local[2]) != user.pw_uid
+        or local[5] != user.pw_dir
+        or (user.pw_uid != 0 and user.pw_uid < 1000)
+        or user.pw_uid == 65534
+    ):
+        raise Refuse("连接管理账号不是已核验的本地账号，禁止改密")
+    previous = management_password_status(payload)
+    if previous["state"] in ["changed", "failed"]:
+        return previous
+    if previous["state"] != "unknown":
+        raise Refuse("原改密结果尚未核实，禁止重复执行")
+    path = safe_directory("/var/lib/compute-control/jobs", True) / (
+        "management-" + payload["change_id"] + ".json"
+    )
+    atomic_json(path, {"state": "started"})
+    try:
+        run(["chpasswd"], name + ":" + password + "\n")
+    except Refuse:
+        atomic_json(path, {"state": "failed"})
+        raise
+    result = {"state": "changed"}
+    atomic_json(path, result)
+    return result
+
+
 def sudo_status(name):
     if name == "root":
         return {"is_admin": True, "admin_status": "root 账号"}
@@ -940,6 +987,8 @@ def main():
             "delete_archive": delete_archive,
             "adopt": adopt,
             "set_password": set_password,
+            "management_password": management_password,
+            "management_password_status": management_password_status,
             "set_privilege": set_privilege,
             "reboot": reboot,
         }
@@ -955,7 +1004,7 @@ def main():
 
             directory = (
                 safe_directory("/var/lib/compute-control/jobs", True)
-                if action == "reboot"
+                if action in ["reboot", "management_password", "management_password_status"]
                 else receipt_path(payload["account_id"]).parent
             )
             path = directory / (

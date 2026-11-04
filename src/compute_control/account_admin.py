@@ -181,6 +181,11 @@ class AccountAdministration:
 
     def guard_reboot(self, conn, machine_id):
         if conn.execute(
+            "SELECT id FROM machine_password_changes WHERE machine_id=? AND state='pending'",
+            (machine_id,),
+        ).fetchone():
+            raise DomainError("机器管理密码变更尚待核查，暂不执行账号操作", 409)
+        if conn.execute(
             "SELECT id FROM jobs WHERE machine_id=? AND kind='reboot' AND step NOT IN ('boot_verified','admin_checked')",
             (machine_id,),
         ).fetchone():
