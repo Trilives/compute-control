@@ -6,6 +6,7 @@ import pytest
 import uvicorn
 from conftest import ADMIN_PASSWORD
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 
 from compute_control import cli
 from compute_control.app import create_app
@@ -39,6 +40,7 @@ def test_explicit_http_keeps_authenticated_session_and_csrf(production_config):
     with TestClient(application, base_url="http://testserver") as client:
         response = client.get("/api/auth/me")
         cookie = response.headers["set-cookie"].lower()
+        assert cookie.startswith("cc_session_http=")
         assert "secure" not in cookie and "httponly" in cookie and "samesite=strict" in cookie
         login = {"role": "admin", "username": "admin", "password": ADMIN_PASSWORD}
         assert client.post("/api/auth/login", json=login).status_code == 403
@@ -100,3 +102,31 @@ def test_cli_rejects_conflicting_or_incomplete_tls(
         cli.main()
     assert exc.value.code == 1
     assert "TLS" in capsys.readouterr().err
+
+
+@pytest.fixture
+def app(production_config):
+    application = create_app(Config.load(production_config("true")))
+    application.state.auth.init_admin("admin", ADMIN_PASSWORD)
+    return application
+
+
+def test_browser_http_login_ignores_old_https_cookie(live_page):
+    page = live_page
+    page.context.add_cookies(
+        [{"name": "cc_session", "value": "legacy-https-session", "url": page.url, "secure": True}]
+    )
+    page.reload()
+    expect(page.locator("#admin-entry")).to_be_enabled()
+    page.locator("#admin-entry").click()
+    page.locator("#login-name").fill("admin")
+    page.locator("#login-password").fill(ADMIN_PASSWORD)
+    page.locator("#login-form button[type=submit]").click()
+    expect(page.locator("#console")).to_be_visible()
+    page.reload()
+    expect(page.locator("#role-label")).to_have_text("ADMIN WORKSPACE")
+    cookies = {cookie["name"]: cookie for cookie in page.context.cookies()}
+    assert "cc_session_http" in cookies and not cookies["cc_session_http"]["secure"]
+    assert cookies["cc_session"]["value"] == "legacy-https-session"
+    page.get_by_role("button", name="退出", exact=True).click()
+    expect(page.locator("#welcome")).to_be_visible()
