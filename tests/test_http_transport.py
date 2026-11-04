@@ -95,9 +95,7 @@ def test_cli_rejects_conflicting_or_incomplete_tls(
     production_config, monkeypatch, capsys, insecure, tls_args
 ):
     path = production_config(insecure)
-    monkeypatch.setattr(
-        sys, "argv", ["compute-control", "--config", str(path), "serve", *tls_args]
-    )
+    monkeypatch.setattr(sys, "argv", ["compute-control", "--config", str(path), "serve", *tls_args])
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 1

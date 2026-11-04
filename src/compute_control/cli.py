@@ -48,7 +48,11 @@ def main():
                     db.audit(conn, "local-cli", "admin.password.reset", "admin")
             print("管理员设置完成。密码未写入日志或命令参数。")
         elif args.command == "serve":
-            if config.mode == "production" and not (args.ssl_certfile and args.ssl_keyfile):
+            if bool(args.ssl_certfile) != bool(args.ssl_keyfile):
+                raise DomainError("TLS 证书和私钥必须同时提供")
+            if config.allow_insecure_http and (args.ssl_certfile or args.ssl_keyfile):
+                raise DomainError("allow_insecure_http=true 时不能同时指定 TLS 证书")
+            if config.secure_cookie and not (args.ssl_certfile and args.ssl_keyfile):
                 raise DomainError("生产模式必须提供 --ssl-certfile 和 --ssl-keyfile")
             import uvicorn
 

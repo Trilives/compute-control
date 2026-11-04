@@ -9,6 +9,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Config:
     mode: str = "development"
+    allow_insecure_http: bool = False
     host: str = "127.0.0.1"
     port: int = 8443
     runtime_dir: Path = Path("runtime")
@@ -20,7 +21,7 @@ class Config:
 
     @property
     def secure_cookie(self):
-        return self.mode == "production"
+        return self.mode == "production" and not self.allow_insecure_http
 
     @classmethod
     def load(cls, path=None):
@@ -37,12 +38,14 @@ class Config:
             raise ValueError("runtime_dir 必须为非空路径字符串")
         data["runtime_dir"] = (path.parent / runtime).resolve()
         config = cls(**data)
+        if type(config.allow_insecure_http) is not bool:
+            raise ValueError("allow_insecure_http 必须为布尔值")
         if config.mode not in ("development", "production"):
             raise ValueError("mode 必须为 development 或 production")
         if not isinstance(config.host, str) or not config.host:
             raise ValueError("host 必须是非空字符串")
         if config.mode == "development" and config.host not in ("127.0.0.1", "::1", "localhost"):
-            raise ValueError("开发模式仅允许回环监听，局域网部署请启用 production 和 TLS")
+            raise ValueError("开发模式仅允许回环监听，局域网部署请启用 production")
         for key in (
             "port",
             "session_seconds",

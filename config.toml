@@ -1,5 +1,6 @@
-# Development defaults; production must use TLS and secure cookies.
+# Development defaults; production requires TLS unless HTTP is explicitly enabled.
 mode = "development"
+allow_insecure_http = false
 host = "127.0.0.1"
 port = 8443
 runtime_dir = "runtime"
