@@ -83,7 +83,7 @@ window.ComputeCharts = (() => {
       try {
         const history = await api(`/machines/${machine.id}/history`);
         for (const row of history.samples) observe({ id: machine.id, sampled: row.sampled, snapshot: row.snapshot });
-        const text = `${history.samples.length} 次真实探测 · 后台每小时采样，手动刷新也会记点；未采到的时段不补点。`;
+        const text = `${history.samples.length} 次真实探测 · 后台按配置周期采样，手动刷新也会记点；未采到的时段不补点。`;
         content.replaceChildren(node('p', text, 'muted'), button('更新历史显示', loadHistory), host(machine));
         for (const item of machine.snapshot?.gpus || []) { content.append(node('h3', `GPU ${item.index} · ${item.name}`), gpu(machine, item)); }
         loaded = true;

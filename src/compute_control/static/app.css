@@ -136,3 +136,5 @@ dialog[open] { display: flex; flex-direction: column; }
 .row-actions { margin-top: 0; }
 .machine-management { border-top: 1px solid var(--line); padding-top: 12px; }
 @media (max-width: 650px) { .section-head { flex-wrap: wrap; } #page-actions { justify-content: flex-start; } .machine-grid .panel { overflow-wrap: anywhere; } }
+.people-controls { position: sticky; top: calc(var(--topbar-height, 76px) + 8px); z-index: 2; align-items: center; padding: 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 4px 12px #0001; }
+.people-controls input { width: 120px; margin: 0; } .people-controls .primary { margin-left: auto; }

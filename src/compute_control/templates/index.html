@@ -33,7 +33,7 @@
       <nav id="tabs" aria-label="控制台导航"></nav>
       <div id="summary" class="summary"></div>
       <section id="content" aria-live="polite"></section>
-      <p class="muted footnote">后台每小时探测，页面按操作更新；可申请刷新当前状态，下拉展开最近 24 小时真实历史采样。账号不代表独占机器或 GPU。</p>
+      <p class="muted footnote">后台按配置周期探测，页面按操作更新；可申请刷新当前状态，下拉展开最近 24 小时真实历史采样。账号不代表独占机器或 GPU。</p>
     </section>
   </main>
   <dialog id="machine-dialog"><form id="machine-form"><h2>添加算力机</h2><p class="muted">填写管理凭据后直接检查并添加，不影响机器上的已有账号。</p>
@@ -73,7 +73,7 @@
     <label>机器<select name="machine_id" required></select></label>
     <label>Linux 用户名<input name="username" pattern="[a-z][a-z0-9_\-]{0,31}" maxlength="32" required autocomplete="off"></label>
     <label>登录密码（至少 3 个字符）<input name="password" type="password" minlength="3" maxlength="256" required autocomplete="new-password"></label>
-    <p class="muted">普通 Linux 账号，每人默认共 3 个，同一台机器可申请多个，计入个人总额度。提交后立即创建，请妥善保存密码。</p>
+    <p class="muted">普通 Linux 账号，额度以当前个人上限为准，同一台机器可申请多个，统一计入总额度。提交后立即创建，请妥善保存密码。</p>
     <footer><button type="button" data-close>取消</button><button class="primary" type="submit">立即申请</button></footer>
   </form></dialog>
   <dialog id="password-dialog"><form id="password-form"><h2>为原任务重新输入密码</h2>

@@ -101,16 +101,15 @@ async function render(revision) {
     filter.append(input, el('span', '显示已清理账号')); actions.append(filter);
   }
   if (state.tab === 'accounts' && state.role === 'admin') actions.append(button('接管已有账号', AdminAccounts.openAdopt));
-  if (state.tab === 'people') actions.append(button('+ 添加姓名', () => openPerson(), 'primary'));
   if (state.tab === 'accounts' || (state.tab === 'machines' && state.role === 'applicant')) actions.append(button('+ 申请账号', () => openAccount(), 'primary'));
   $('#summary').replaceChildren(metric('可见机器', state.machines.length), metric(state.role === 'admin' ? '台账可见账号' : '已用账号 / 个人上限', state.role === 'admin' ? accounts.length : `${state.person.used} / ${state.person.effective_quota}`), metric('开放申请', state.machines.filter(machine => machine.available).length));
   const content = $('#content'); content.replaceChildren();
   if (['announcements', 'permissions', 'contacts'].includes(state.tab)) { await Portal.render(state.tab, content, actions, revision); return; }
   if (state.tab === 'machines') renderMachines(content);
   else if (state.tab === 'people') {
-    const settings = await api('/admin/settings'); if (revision !== loadRevision) return; const box = el('div', undefined, 'actions');
+    const settings = await api('/admin/settings'); if (revision !== loadRevision) return; const box = el('div', undefined, 'actions people-controls');
     const input = el('input'); input.type = 'number'; input.min = '0'; input.max = '1000000'; input.value = settings.default_quota; input.setAttribute('aria-label', '全局默认账号额度');
-    box.append(el('span', '全局默认额度'), input, button('保存默认额度', async () => { await api('/admin/settings/quota', 'PUT', { value: Number(input.value) }); notify('默认额度已更新'); await load(); }));
+    box.append(el('span', '全局默认额度'), input, button('保存默认额度', async () => { await api('/admin/settings/quota', 'PUT', { value: Number(input.value) }); notify('默认额度已更新'); await load(); }), button('+ 添加姓名', () => openPerson(), 'primary'));
     content.append(box, state.people.length ? table(['姓名', '状态', '已用 / 上限', '额度来源', '操作'], state.people.map(person => [person.name, person.enabled ? '启用' : '停用', `${person.used} / ${person.effective_quota}`, person.quota === null ? '默认' : '个人设置', personActions(person)])) : empty('尚无登记姓名', '添加姓名后，该人员即可立即申请机器账号。'));
   } else if (state.tab === 'accounts') {
     renderAccountGroups(accounts, content);
@@ -249,6 +248,7 @@ onSubmit('#account-form', async form => { const data = Object.fromEntries(new Fo
 onSubmit('#password-form', async form => { await api(`/jobs/${form.dataset.jobId}/password`, 'POST', { password: form.elements.password.value }); form.reset(); $('#password-dialog').close(); await load(); });
 $('#development-guide').addEventListener('click', () => Guides.development(false).catch(error => notify(error.message, true)));
 $('#operation-guide').addEventListener('click', () => Guides.operation().catch(error => notify(error.message, true)));
+new ResizeObserver(() => document.documentElement.style.setProperty('--topbar-height', `${$('.topbar').getBoundingClientRect().height}px`)).observe($('.topbar'));
 AdminAccounts.initialize(); Portal.initialize(); Credentials.initialize();
 boot().catch(error => notify(error.message, true));
 
