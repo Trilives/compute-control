@@ -82,3 +82,7 @@ def register_portal(app, service, member, admin):
     @app.post("/api/machines/{machine_id}/notes", status_code=201)
     def add_note(machine_id: str, data: MachineNote, current=Depends(member)):
         return service.add_machine_note(current, machine_id, data.content)
+
+    @app.delete("/api/machines/{machine_id}/notes/{note_id}")
+    def delete_note(machine_id: str, note_id: str, current=Depends(member)):
+        return service.delete_machine_note(current, machine_id, note_id)

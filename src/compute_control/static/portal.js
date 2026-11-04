@@ -46,13 +46,20 @@ window.Portal = (() => {
     const form = $('#account-form'), owner = state.role === 'admin' ? form.elements.person_id.value : state.person_id;
     for (const option of form.elements.machine_id.options) { const machine = state.machines.find(item => item.id === option.value); if (machine) option.textContent = `${machine.name}（已有 ${machineAccountCount(machine.id, owner)} 个账号）`; }
   }
-  async function openNotes(machine) {
-    const notes = await api(`/machines/${machine.id}/notes`), form = $('#machine-notes-form'); form.reset(); form.dataset.machineId = machine.id;
+  async function openNotes(machine, preserveDraft = false) {
+    const form = $('#machine-notes-form'), draft = preserveDraft ? form.elements.content.value : '';
+    const notes = await api(`/machines/${machine.id}/notes`); form.reset(); form.elements.content.value = draft; form.dataset.machineId = machine.id;
     $('#machine-notes-title').textContent = `${machine.name} · 机器备注`;
     $('#machine-notes-history').replaceChildren(...(notes.length ? notes.map(note => {
-      const item = el('article', undefined, 'announcement'); item.append(el('strong', `${note.author_name} · ${date(note.created)}`), el('p', note.content, 'plain-text')); return item;
+      const item = el('article', undefined, 'announcement'); item.append(el('strong', `${note.author_name} · ${date(note.created)}`), el('p', note.content, 'plain-text'));
+      if (note.can_delete) item.append(button('删除备注', async () => {
+        if (!confirm(`删除 ${note.author_name} 发布的这条备注？删除后无法在页面恢复。`)) return;
+        await api(`/machines/${machine.id}/notes/${note.id}`, 'DELETE');
+        await load(); await openNotes(machine, true); notify('备注已删除');
+      }, 'danger'));
+      return item;
     }) : [el('p', '暂无备注，可以补充这台机器的使用情况或注意事项。', 'muted')]));
-    Dialogs.open('#machine-notes-dialog');
+    if (!$('#machine-notes-dialog').open) Dialogs.open('#machine-notes-dialog');
   }
   function notesButton(machine) { return button('机器备注', () => openNotes(machine)); }
   function accountControls(account) {

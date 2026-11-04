@@ -198,10 +198,36 @@ class PortalOperations:
     def machine_notes(self, session, machine_id):
         if not any(item["id"] == machine_id for item in self.visible_machines(session)):
             raise DomainError("机器不存在", 404)
-        return self.db.all(
-            "SELECT id,author_name,content,created FROM machine_notes WHERE machine_id=? ORDER BY created DESC,id DESC",
-            (machine_id,),
+        notes = self.db.all(
+            "SELECT id,author_name,content,created,(? OR author_key=?) AS can_delete "
+            "FROM machine_notes WHERE machine_id=? ORDER BY created DESC,id DESC",
+            (session["role"] == "admin", self.ledger_viewer(session), machine_id),
         )
+        for note in notes:
+            note["can_delete"] = bool(note["can_delete"])
+        return notes
+
+    def delete_machine_note(self, session, machine_id, note_id):
+        viewer = self.ledger_viewer(session)
+        with self.db.connect(write=True) as conn:
+            sql = (
+                "SELECT n.author_key FROM machine_notes n JOIN machines m ON m.id=n.machine_id "
+                "WHERE n.id=? AND n.machine_id=?"
+            )
+            params = (note_id, machine_id)
+            if session["role"] != "admin":
+                sql += " AND (m.available=1 OR m.id IN (SELECT machine_id FROM accounts WHERE person_id=? AND occupies=1))"
+                params += (session["person_id"],)
+            note = conn.execute(sql, params).fetchone()
+            if not note:
+                raise DomainError("备注不存在", 404)
+            if session["role"] != "admin" and note["author_key"] != viewer:
+                raise DomainError("只能删除自己发布的备注", 403)
+            conn.execute(
+                "DELETE FROM machine_notes WHERE id=? AND machine_id=?", (note_id, machine_id)
+            )
+            self.db.audit(conn, viewer, "machine.note.delete", machine_id + ":" + note_id)
+        return {"deleted": True}
 
     def add_machine_note(self, session, machine_id, content):
         if not content.strip():
