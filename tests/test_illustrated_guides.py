@@ -74,3 +74,25 @@ def test_browser_embeds_correct_manual_and_clears_it_on_logout(app, live_page):
 def test_missing_document_cannot_fall_through_to_other_role(app, client):
     for route in ["document", "download"]:
         assert client.get("/api/operation-guide/" + route).status_code == 404
+
+
+def test_internal_distribution_is_never_a_web_tutorial_fallback(app, client):
+    private = app.state.config.runtime_dir / "tutorials"
+    private.mkdir(mode=0o700)
+    separate = app.state.config.runtime_dir / "internal-tutorials"
+    separate.mkdir(mode=0o700)
+    for root in [private, separate]:
+        for role in ["admin", "applicant"]:
+            (root / (role + ".html")).write_text("INTERNAL-DISTRIBUTION-ONLY")
+            (root / (role + ".pdf")).write_bytes(b"%PDF-INTERNAL-DISTRIBUTION-ONLY")
+    metadata = client.get("/api/operation-guide").json()
+    assert metadata.get("format") != "html"
+    for route in ["document", "download"]:
+        result = client.get(
+            "/api/operation-guide/" + route + "?edition=internal&path=../tutorials/admin.html"
+        )
+        assert result.status_code == 404 and "INTERNAL-DISTRIBUTION-ONLY" not in result.text
+    install_tutorials(app)
+    assert client.get("/api/operation-guide").json()["format"] == "html"
+    assert "admin-only-content" in client.get("/api/operation-guide/document").text
+    assert "INTERNAL-DISTRIBUTION-ONLY" not in client.get("/api/operation-guide/document").text
