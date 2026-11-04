@@ -1,12 +1,13 @@
 """Illustrated documents and downloads are authenticated and selected by actual role."""
 
+import pytest
 from conftest import ADMIN_PASSWORD, login, person
 from fastapi.testclient import TestClient
 from playwright.sync_api import expect
 
 
 def install_tutorials(app):
-    root = app.state.config.runtime_dir / "tutorials"
+    root = app.state.config.runtime_dir / "web-tutorials"
     root.mkdir(mode=0o700)
     for role, title in [("admin", "管理员图文教程"), ("applicant", "申请者图文教程")]:
         (root / f"{role}.html").write_text(
@@ -96,3 +97,22 @@ def test_internal_distribution_is_never_a_web_tutorial_fallback(app, client):
     assert client.get("/api/operation-guide").json()["format"] == "html"
     assert "admin-only-content" in client.get("/api/operation-guide/document").text
     assert "INTERNAL-DISTRIBUTION-ONLY" not in client.get("/api/operation-guide/document").text
+
+
+@pytest.mark.parametrize("link_directory", [False, True])
+def test_web_guide_cannot_symlink_into_internal_distribution(app, client, link_directory):
+    private = app.state.config.runtime_dir / "internal-tutorials"
+    private.mkdir()
+    (private / "admin.html").write_text("INTERNAL-DISTRIBUTION-ONLY")
+    (private / "admin.pdf").write_bytes(b"%PDF-INTERNAL-DISTRIBUTION-ONLY")
+    web = app.state.config.runtime_dir / "web-tutorials"
+    if link_directory:
+        web.symlink_to(private, target_is_directory=True)
+    else:
+        web.mkdir()
+        for suffix in [".html", ".pdf"]:
+            (web / ("admin" + suffix)).symlink_to(private / ("admin" + suffix))
+    assert client.get("/api/operation-guide").json().get("format") != "html"
+    for route in ["document", "download"]:
+        response = client.get("/api/operation-guide/" + route)
+        assert response.status_code == 404 and "INTERNAL-DISTRIBUTION-ONLY" not in response.text
