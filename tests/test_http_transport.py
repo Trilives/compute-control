@@ -4,7 +4,7 @@ import sys
 
 import pytest
 import uvicorn
-from conftest import ADMIN_PASSWORD
+from conftest import ADMIN_PASSWORD, FakeRemote, machine, person
 from fastapi.testclient import TestClient
 from playwright.sync_api import expect
 
@@ -106,7 +106,7 @@ def test_cli_rejects_conflicting_or_incomplete_tls(
 
 @pytest.fixture
 def app(production_config):
-    application = create_app(Config.load(production_config("true")))
+    application = create_app(Config.load(production_config("true")), remote=FakeRemote())
     application.state.auth.init_admin("admin", ADMIN_PASSWORD)
     return application
 
@@ -130,3 +130,26 @@ def test_browser_http_login_ignores_old_https_cookie(live_page):
     assert cookies["cc_session"]["value"] == "legacy-https-session"
     page.get_by_role("button", name="退出", exact=True).click()
     expect(page.locator("#welcome")).to_be_visible()
+
+
+def test_http_account_form_works_without_secure_context_api(app, live_page):
+    person(app)
+    machine(app)
+    page = live_page
+    page.add_init_script(
+        "Object.defineProperty(crypto, 'randomUUID', {value: undefined, configurable: true})"
+    )
+    page.reload()
+    page.locator("#admin-entry").click()
+    page.locator("#login-name").fill("admin")
+    page.locator("#login-password").fill(ADMIN_PASSWORD)
+    page.locator("#login-form button[type=submit]").click()
+    expect(page.locator("#console")).to_be_visible()
+    page.locator("#tabs").get_by_role("button", name="账号台账", exact=True).click()
+    page.get_by_role("button", name="+ 申请账号", exact=True).click()
+    expect(page.locator("#account-dialog")).to_be_visible()
+    first = page.locator("#account-form").get_attribute("data-request-key")
+    assert first and 16 <= len(first) <= 100
+    page.locator("#account-dialog .dialog-heading button").click()
+    page.get_by_role("button", name="+ 申请账号", exact=True).click()
+    assert page.locator("#account-form").get_attribute("data-request-key") != first
