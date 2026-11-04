@@ -153,3 +153,77 @@ def test_http_account_form_works_without_secure_context_api(app, live_page):
     page.locator("#account-dialog .dialog-heading button").click()
     page.get_by_role("button", name="+ 申请账号", exact=True).click()
     assert page.locator("#account-form").get_attribute("data-request-key") != first
+
+
+@pytest.mark.parametrize("enabled", ["true", "false"])
+def test_explicit_https_option_selects_transport_independently_of_mode(
+    production_config, monkeypatch, enabled
+):
+    path = production_config()
+    path.write_text(path.read_text() + f"https_enabled={enabled}\n")
+    arguments = ["compute-control", "--config", str(path), "serve"]
+    if enabled == "true":
+        arguments += ["--ssl-certfile", "cert.pem", "--ssl-keyfile", "key.pem"]
+    calls = []
+    monkeypatch.setattr(sys, "argv", arguments)
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append((app, kwargs)))
+    cli.main()
+    application, options = calls[0]
+    assert application.state.config.secure_cookie == (enabled == "true")
+    with TestClient(
+        application, base_url="https://testserver" if enabled == "true" else "http://testserver"
+    ) as client:
+        cookie = client.get("/api/auth/me").headers["set-cookie"].lower()
+        assert ("; secure" in cookie) == (enabled == "true")
+        assert cookie.startswith("cc_session=" if enabled == "true" else "cc_session_http=")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['https_enabled="false"', "https_enabled=1", "https_enabled=true\nallow_insecure_http=true"],
+)
+def test_invalid_https_option_is_rejected(tmp_path, text):
+    path = tmp_path / "transport.toml"
+    path.write_text(text)
+    with pytest.raises(ValueError, match="https_enabled"):
+        Config.load(path)
+
+
+@pytest.mark.parametrize(
+    "enabled,certificates",
+    [("true", []), ("false", ["--ssl-certfile", "cert.pem", "--ssl-keyfile", "key.pem"])],
+)
+def test_explicit_https_setting_requires_consistent_certificates(
+    production_config, monkeypatch, enabled, certificates
+):
+    path = production_config()
+    path.write_text(path.read_text() + f"https_enabled={enabled}\n")
+    monkeypatch.setattr(
+        sys, "argv", ["compute-control", "--config", str(path), "serve", *certificates]
+    )
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 1
+
+
+def test_legacy_development_tls_also_uses_secure_cookies(tmp_path, monkeypatch):
+    path = tmp_path / "legacy-development.toml"
+    path.write_text('mode="development"\nhost="127.0.0.1"\nruntime_dir="state"\n')
+    calls = []
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "compute-control",
+            "--config",
+            str(path),
+            "serve",
+            "--ssl-certfile",
+            "cert.pem",
+            "--ssl-keyfile",
+            "key.pem",
+        ],
+    )
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(app))
+    cli.main()
+    assert calls[0].state.config.secure_cookie
