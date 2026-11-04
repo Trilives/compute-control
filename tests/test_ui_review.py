@@ -91,3 +91,31 @@ def test_navigation_buttons_and_responsive_dialogs(app, live_page, role):
         page.locator("#guide-dialog .dialog-heading button").click()
     assert app.state.db.all("SELECT * FROM machine_notes") == []
     assert errors == []
+
+
+def test_add_person_stays_visible_while_scrolling_long_directory(app, live_page):
+    for index in range(45):
+        person(app, f"人员 {index:02d}")
+    page = live_page
+    page.locator("#admin-entry").click()
+    page.locator("#login-name").fill("admin")
+    page.locator("#login-password").fill(ADMIN_PASSWORD)
+    page.locator("#login-form button[type=submit]").click()
+    page.locator("#tabs").get_by_role("button", name="申请者与额度", exact=True).click()
+    add = page.get_by_role("button", name="+ 添加姓名", exact=True)
+    for width in [1440, 390]:
+        page.set_viewport_size({"width": width, "height": 900})
+        page.locator("#content tbody tr").last.scroll_into_view_if_needed()
+        expect(add).to_be_in_viewport()
+        bounds = add.bounding_box()
+        header = page.locator(".topbar").bounding_box()
+        assert bounds["y"] >= header["y"] + header["height"]
+        add.click()
+        expect(page.locator("#person-dialog")).to_be_visible()
+        page.locator("#person-dialog .dialog-heading button").click()
+        page.evaluate("scrollTo(0, 0)")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    add.click()
+    page.locator("#person-form [name=name]").fill("新增人员")
+    page.locator("#person-form button[type=submit]").click()
+    expect(page.locator("#content tbody tr")).to_have_count(46)
