@@ -123,6 +123,11 @@ async function render(revision) {
   }
   [...$('#tabs').children].forEach(node => node.classList.toggle('active', node.textContent === titles[state.tab]));
 }
+function lastActive(account) {
+  if (account.last_active == null) return el('span', '暂无记录');
+  const value = el('time', date(account.last_active)); value.dateTime = new Date(account.last_active * 1000).toISOString();
+  value.title = '最近一次可观测的成功登录；不代表进程结束时间'; return value;
+}
 function renderAccountGroups(accounts, content) {
   if (!accounts.length) { content.append(empty('尚无登记账号', '申请后，这里按机器保存姓名与账号的对应关系。')); return; }
   const groups = new Map();
@@ -131,7 +136,7 @@ function renderAccountGroups(accounts, content) {
     const machine = rows[0], group = el('section', undefined, 'panel account-machine-group'), heading = el('div', undefined, 'account-machine-heading');
     const title = el('div'); title.append(el('h2', machine.machine_name), el('p', `${machine.host}:${machine.port}`, 'muted'));
     heading.append(title, el('span', `占用额度 ${rows.filter(account => account.occupies).length} 个 · 台账 ${rows.length} 条`, 'badge')); group.append(heading);
-    group.append(table(['姓名', '用户名', '状态', 'sudo 权限', '创建时间', '操作'], rows.map(account => [account.name, account.username, (labels[account.state] || account.state) + (account.ledger_cleared_at ? '（已清理）' : ''), state.role === 'admin' ? Portal.permissionSwitch(account) : account.is_admin == null ? '未确认' : account.is_admin ? '有' : '无', date(account.created), Portal.accountControls(account)])));
+    group.append(table(['姓名', '用户名', '状态', 'sudo 权限', '最后活跃时间', '创建时间', '操作'], rows.map(account => [account.name, account.username, (labels[account.state] || account.state) + (account.ledger_cleared_at ? '（已清理）' : ''), state.role === 'admin' ? Portal.permissionSwitch(account) : account.is_admin == null ? '未确认' : account.is_admin ? '有' : '无', lastActive(account), date(account.created), Portal.accountControls(account)])));
     content.append(group);
   }
 }

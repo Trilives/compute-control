@@ -285,11 +285,18 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
                     "INSERT OR IGNORE INTO login_events VALUES (?,?,?)",
                     [(machine_id, item["username"], item["ts"]) for item in events],
                 )
+                conn.executemany(
+                    "UPDATE accounts SET last_active=CASE WHEN last_active IS NULL OR last_active<? "
+                    "THEN ? ELSE last_active END WHERE machine_id=? AND username=?",
+                    [(event["ts"], event["ts"], machine_id, event["username"]) for event in events],
+                )
                 conn.execute("DELETE FROM login_events WHERE ts<?", (time.time() - 90 * 86400,))
 
     def accounts(self, session, include_cleared=False):
         sql = (
-            "SELECT a.*,p.name,p.enabled AS owner_enabled,p.deleted_at AS owner_deleted_at,m.name AS machine_name,m.host,m.port,d.cleared AS ledger_cleared_at FROM accounts a "
+            "SELECT a.*,p.name,p.enabled AS owner_enabled,p.deleted_at AS owner_deleted_at,m.name AS machine_name,m.host,m.port,d.cleared AS ledger_cleared_at, "
+            "(SELECT MAX(ts) FROM login_events e WHERE e.machine_id=a.machine_id "
+            "AND e.username=a.username) AS observed_login FROM accounts a "
             "JOIN applicants p ON p.id=a.person_id JOIN machines m ON m.id=a.machine_id "
             "LEFT JOIN account_ledger_dismissals d ON d.account_id=a.id AND d.viewer_key=? WHERE a.username<>'root'"
         )
@@ -309,6 +316,10 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
         for row in rows:
             row["can_clear_ledger"] = (
                 row["state"] == "retired" and not row["occupies"] and row["id"] not in pending
+            )
+            observed = row.pop("observed_login")
+            row["last_active"] = max(
+                (ts for ts in (row["last_active"], observed) if ts is not None), default=None
             )
             row["password_available"] = bool(row.pop("credential_cipher", None))
         return rows

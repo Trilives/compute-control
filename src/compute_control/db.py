@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS accounts (
  machine_id TEXT NOT NULL REFERENCES machines(id), username TEXT NOT NULL,
  state TEXT NOT NULL, occupies INTEGER NOT NULL DEFAULT 1, uid INTEGER, home TEXT,
  created REAL NOT NULL, credential_cipher TEXT, source TEXT NOT NULL DEFAULT 'created',
- is_admin INTEGER, privilege_sampled REAL,
+ is_admin INTEGER, privilege_sampled REAL, last_active REAL,
  UNIQUE(machine_id, username));
 CREATE INDEX IF NOT EXISTS person_machine_lookup ON accounts(person_id,machine_id);
 CREATE TABLE IF NOT EXISTS machine_notes (
@@ -107,6 +107,7 @@ class Database:
                     "credential_cipher": "TEXT",
                     "is_admin": "INTEGER",
                     "privilege_sampled": "REAL",
+                    "last_active": "REAL",
                     "source": "TEXT NOT NULL DEFAULT 'created'",
                 },
             }
@@ -115,6 +116,11 @@ class Database:
                 for column, definition in columns.items():
                     if column not in existing:
                         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            conn.execute(
+                "UPDATE accounts SET last_active=(SELECT MAX(ts) FROM login_events e "
+                "WHERE e.machine_id=accounts.machine_id AND e.username=accounts.username) "
+                "WHERE last_active IS NULL"
+            )
             if version in (1, 2):
                 for row in conn.execute(
                     "SELECT id,sampled,snapshot FROM machines WHERE sampled>? AND snapshot IS NOT NULL",
