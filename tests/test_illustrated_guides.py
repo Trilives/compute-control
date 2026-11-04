@@ -1,118 +1,91 @@
-"""Illustrated documents and downloads are authenticated and selected by actual role."""
+"""Built-in Markdown guides use synthetic images and never load runtime documents."""
 
-import pytest
 from conftest import ADMIN_PASSWORD, login, person
 from fastapi.testclient import TestClient
 from playwright.sync_api import expect
 
 
-def install_tutorials(app):
-    root = app.state.config.runtime_dir / "web-tutorials"
-    root.mkdir(mode=0o700)
-    for role, title in [("admin", "管理员图文教程"), ("applicant", "申请者图文教程")]:
-        (root / f"{role}.html").write_text(
-            f"<!doctype html><html><head><style>h1{{color:navy}}</style></head>"
-            f"<body><h1>{title}</h1><p>{role}-only-content</p></body></html>"
-        )
-        (root / f"{role}.pdf").write_bytes(b"%PDF-1.4\n" + role.encode())
+def install_private_documents(app):
+    for name in ["tutorials", "internal-tutorials", "web-tutorials"]:
+        root = app.state.config.runtime_dir / name
+        root.mkdir(mode=0o700)
+        for role in ["admin", "applicant"]:
+            for suffix in [".html", ".pdf", ".md"]:
+                (root / (role + suffix)).write_text("INTERNAL-DISTRIBUTION-ONLY")
 
 
-def test_illustrated_guides_and_downloads_follow_authenticated_role(app, client):
-    install_tutorials(app)
+def test_guides_always_return_role_specific_packaged_markdown(app, client):
+    install_private_documents(app)
     person(app)
-    metadata = client.get("/api/operation-guide").json()
-    assert metadata["format"] == "html"
-    assert metadata["document_url"] == "/api/operation-guide/document"
-    assert metadata["download_url"] == "/api/operation-guide/download"
-    response = client.get(metadata["document_url"])
-    assert "admin-only-content" in response.text
-    policy = response.headers["content-security-policy"]
-    assert "frame-ancestors 'self'" in policy and "default-src 'none'" in policy
-    assert response.headers["cache-control"] == "no-store"
-    response = client.get(metadata["download_url"])
-    assert response.content.endswith(b"admin")
-    assert response.headers["content-type"] == "application/pdf"
-    assert "attachment" in response.headers["content-disposition"]
-    with TestClient(app) as user:
-        login(user, "applicant", "张三", "")
-        meta = user.get("/api/operation-guide?role=admin").json()
-        assert meta["title"] == "用户指南"
-        response = user.get(meta["document_url"] + "?role=admin&path=admin.html")
-        assert "applicant-only-content" in response.text
-        assert "admin-only-content" not in response.text
-        assert user.get(meta["download_url"] + "?role=admin").content.endswith(b"applicant")
+    for role in ["admin", "applicant"]:
+        if role == "applicant":
+            login(client, "applicant", "张三", "")
+        response = client.get(
+            "/api/operation-guide?role=admin&edition=internal&path=../internal-tutorials/admin.md"
+        )
+        data = response.json()
+        assert data["format"] == "markdown"
+        assert "document_url" not in data and "download_url" not in data
+        assert data["markdown"].startswith(
+            "# 管理员操作指南" if role == "admin" else "# 申请者使用指南"
+        )
+        assert "INTERNAL-DISTRIBUTION-ONLY" not in response.text
+        assert "![ " not in data["markdown"]
+        assert "../src/compute_control/static/guide-images/" in data["markdown"]
+        assert response.headers["cache-control"] == "no-store"
+        for route in ["document", "download"]:
+            assert client.get("/api/operation-guide/" + route).status_code == 404
     with TestClient(app) as guest:
-        for url in ["/api/operation-guide", metadata["document_url"], metadata["download_url"]]:
-            assert guest.get(url).status_code == 401
+        assert guest.get("/api/operation-guide").status_code == 401
 
 
-def test_browser_embeds_correct_manual_and_clears_it_on_logout(app, live_page):
-    install_tutorials(app)
+def test_browser_embeds_markdown_and_local_images_without_pdf_or_iframe(app, live_page):
+    install_private_documents(app)
     person(app)
     page = live_page
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
     page.locator("#admin-entry").click()
     page.locator("#login-name").fill("admin")
     page.locator("#login-password").fill(ADMIN_PASSWORD)
     page.locator("#login-form button[type=submit]").click()
     page.locator("#operation-guide").click()
-    frame = page.frame_locator("#operation-guide-frame")
-    expect(frame.get_by_role("heading", name="管理员图文教程")).to_be_visible()
-    expect(page.get_by_role("link", name="下载 PDF", exact=True)).to_have_attribute(
-        "href", "/api/operation-guide/download"
+    guide = page.locator("#guide-content .operation-guide")
+    expect(guide.get_by_role("heading", name="管理员操作指南", exact=True)).to_be_visible()
+    expect(guide.locator('img[src$="admin-machine-menu.png"]')).to_have_count(1)
+    expect(page.locator("#guide-content iframe")).to_have_count(0)
+    expect(page.get_by_role("link", name="下载 PDF", exact=True)).to_have_count(0)
+    guide.locator("img").evaluate_all("nodes=>nodes.forEach(node=>node.loading='eager')")
+    page.wait_for_function(
+        "[...document.querySelectorAll('#guide-content img')].every(img=>img.complete&&img.naturalWidth>0)"
     )
-    sandbox = page.locator("#operation-guide-frame").get_attribute("sandbox")
-    assert "allow-scripts" not in sandbox
+    for width in [1440, 390]:
+        page.set_viewport_size({"width": width, "height": 1000})
+        assert guide.evaluate("node=>node.scrollWidth<=node.clientWidth")
     page.locator("#guide-dialog .dialog-heading button").click()
     page.get_by_role("button", name="退出", exact=True).click()
-    expect(page.locator("#operation-guide-frame")).to_have_count(0)
+    expect(page.locator("#guide-content")).to_be_empty()
     page.locator("#login-name").fill("张三")
     page.locator("#login-form button[type=submit]").click()
     page.locator("#operation-guide").click()
-    expect(frame.get_by_role("heading", name="申请者图文教程")).to_be_visible()
-    expect(frame.get_by_text("admin-only-content", exact=True)).to_have_count(0)
+    expect(guide.get_by_role("heading", name="申请者使用指南", exact=True)).to_be_visible()
+    expect(guide.locator('img[src$="applicant-login.png"]')).to_have_count(1)
+    expect(guide.locator('img[src$="admin-machine-menu.png"]')).to_have_count(0)
+    assert not errors
 
 
-def test_missing_document_cannot_fall_through_to_other_role(app, client):
-    for route in ["document", "download"]:
-        assert client.get("/api/operation-guide/" + route).status_code == 404
-
-
-def test_internal_distribution_is_never_a_web_tutorial_fallback(app, client):
-    private = app.state.config.runtime_dir / "tutorials"
-    private.mkdir(mode=0o700)
-    separate = app.state.config.runtime_dir / "internal-tutorials"
-    separate.mkdir(mode=0o700)
-    for root in [private, separate]:
-        for role in ["admin", "applicant"]:
-            (root / (role + ".html")).write_text("INTERNAL-DISTRIBUTION-ONLY")
-            (root / (role + ".pdf")).write_bytes(b"%PDF-INTERNAL-DISTRIBUTION-ONLY")
-    metadata = client.get("/api/operation-guide").json()
-    assert metadata.get("format") != "html"
-    for route in ["document", "download"]:
-        result = client.get(
-            "/api/operation-guide/" + route + "?edition=internal&path=../tutorials/admin.html"
-        )
-        assert result.status_code == 404 and "INTERNAL-DISTRIBUTION-ONLY" not in result.text
-    install_tutorials(app)
-    assert client.get("/api/operation-guide").json()["format"] == "html"
-    assert "admin-only-content" in client.get("/api/operation-guide/document").text
-    assert "INTERNAL-DISTRIBUTION-ONLY" not in client.get("/api/operation-guide/document").text
-
-
-@pytest.mark.parametrize("link_directory", [False, True])
-def test_web_guide_cannot_symlink_into_internal_distribution(app, client, link_directory):
-    private = app.state.config.runtime_dir / "internal-tutorials"
-    private.mkdir()
-    (private / "admin.html").write_text("INTERNAL-DISTRIBUTION-ONLY")
-    (private / "admin.pdf").write_bytes(b"%PDF-INTERNAL-DISTRIBUTION-ONLY")
-    web = app.state.config.runtime_dir / "web-tutorials"
-    if link_directory:
-        web.symlink_to(private, target_is_directory=True)
-    else:
-        web.mkdir()
-        for suffix in [".html", ".pdf"]:
-            (web / ("admin" + suffix)).symlink_to(private / ("admin" + suffix))
-    assert client.get("/api/operation-guide").json().get("format") != "html"
-    for route in ["document", "download"]:
-        response = client.get("/api/operation-guide/" + route)
-        assert response.status_code == 404 and "INTERNAL-DISTRIBUTION-ONLY" not in response.text
+def test_markdown_images_cannot_fetch_external_or_private_urls(app, live_page):
+    result = live_page.evaluate("""() => {
+      const text=['![演示](../src/compute_control/static/guide-images/applicant-login.png)',
+        '![外站](https://tracker.invalid/x.png)', '![私密](../internal-tutorials/admin.png)',
+        '![脚本](javascript:alert(1))', '![编码](../src/compute_control/static/guide-images/%2e%2e/private.png)',
+        '<img src=x onerror="window.guideXss=true">'].join('\\n');
+      const node=Guides.markdown(text);
+      return {images:[...node.querySelectorAll('img')].map(img=>img.getAttribute('src')),scripts:node.querySelectorAll('script').length,htmlHandlers:node.querySelectorAll('[onerror]').length,xss:!!window.guideXss};
+    }""")
+    assert result == {
+        "images": ["/static/guide-images/applicant-login.png"],
+        "scripts": 0,
+        "htmlHandlers": 0,
+        "xss": False,
+    }
