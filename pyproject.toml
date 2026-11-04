@@ -1,0 +1,44 @@
+[project]
+name = "compute-control"
+version = "0.1.0"
+description = "LAN Linux compute account console"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "jinja2>=3.1,<4",
+  "argon2-cffi>=25,<26",
+  "paramiko>=3.5,<5",
+  "cryptography>=44,<49",
+]
+
+[project.scripts]
+compute-control = "compute_control.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "httpx>=0.28,<1",
+    "ruff>=0.11,<1",
+    "playwright>=1.50,<2",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"docs/USER_GUIDE.md" = "compute_control/guides/USER_GUIDE.md"
+"docs/ADMIN_GUIDE.md" = "compute_control/guides/ADMIN_GUIDE.md"

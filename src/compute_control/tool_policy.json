@@ -1,0 +1,234 @@
+{
+  "title": "开发工具说明",
+  "rows": [
+    {
+      "tool": "Git",
+      "level": "系统级",
+      "description": "所有用户共享"
+    },
+    {
+      "tool": "GCC / G++",
+      "level": "系统级",
+      "description": "基础 C/C++ 编译器"
+    },
+    {
+      "tool": "Make",
+      "level": "系统级",
+      "description": "基础构建工具"
+    },
+    {
+      "tool": "CMake",
+      "level": "系统级 / 用户级",
+      "description": "基础版本系统安装，新版本用户安装"
+    },
+    {
+      "tool": "Ninja",
+      "level": "系统级 / 用户级",
+      "description": "通用构建工具"
+    },
+    {
+      "tool": "GDB",
+      "level": "系统级",
+      "description": "C/C++ 调试器"
+    },
+    {
+      "tool": "Python（系统版本）",
+      "level": "系统级",
+      "description": "供系统工具使用"
+    },
+    {
+      "tool": "Python（开发版本）",
+      "level": "用户级",
+      "description": "通过 uv 等工具管理"
+    },
+    {
+      "tool": "uv",
+      "level": "用户级",
+      "description": "Python 版本、虚拟环境和依赖管理"
+    },
+    {
+      "tool": "Pixi",
+      "level": "用户级",
+      "description": "Conda 生态的跨语言环境与依赖管理"
+    },
+    {
+      "tool": "Conda / Miniforge",
+      "level": "用户级",
+      "description": "如果使用 Pixi，通常不需要额外安装"
+    },
+    {
+      "tool": "Node.js",
+      "level": "用户级",
+      "description": "推荐通过 nvm / fnm 管理"
+    },
+    {
+      "tool": "npm",
+      "level": "用户级",
+      "description": "通常随 Node.js 安装"
+    },
+    {
+      "tool": "pnpm",
+      "level": "用户级",
+      "description": "JavaScript 包管理器"
+    },
+    {
+      "tool": "Go",
+      "level": "用户级",
+      "description": "独立的 Go 工具链"
+    },
+    {
+      "tool": "Rust / Cargo",
+      "level": "用户级",
+      "description": "通过 rustup 管理"
+    },
+    {
+      "tool": "VS Code Server",
+      "level": "用户级",
+      "description": "Remote SSH 自动部署"
+    },
+    {
+      "tool": "Codex CLI / Claude Code",
+      "level": "用户级",
+      "description": "个人 AI 开发工具"
+    },
+    {
+      "tool": "PyTorch / NumPy",
+      "level": "项目级",
+      "description": "通过 uv 或 Pixi 管理"
+    },
+    {
+      "tool": "ROS 2 依赖",
+      "level": "项目级或系统级",
+      "description": "Pixi 可管理部分 ROS 2 发行版与依赖"
+    },
+    {
+      "tool": "C/C++ 第三方库",
+      "level": "项目级",
+      "description": "通过 Pixi、vcpkg 等管理"
+    },
+    {
+      "tool": "npm 项目依赖",
+      "level": "项目级",
+      "description": "记录于 package.json"
+    },
+    {
+      "tool": "CUDA Toolkit",
+      "level": "系统级",
+      "description": "由管理员安装并维护；用户项目使用对应运行时环境。驱动显示的 CUDA 兼容版本不代表已安装 Toolkit。"
+    },
+    {
+      "tool": "NVIDIA 驱动",
+      "level": "系统级",
+      "description": "由管理员安装和维护，供各用户共享使用。"
+    }
+  ],
+  "system_note": "系统依赖出现安装、版本或兼容性问题，请联系管理员处理。请提供机器名称、所需工具/版本和用途。用户级和项目级环境按指南管理；本检测不自动安装软件，也不代表满足所有项目依赖。",
+  "checks": [
+    {
+      "key": "git",
+      "label": "Git",
+      "candidates": [
+        "git"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "gcc",
+      "label": "GCC",
+      "candidates": [
+        "gcc"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "g++",
+      "label": "G++",
+      "candidates": [
+        "g++"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "make",
+      "label": "Make",
+      "candidates": [
+        "make"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "cmake",
+      "label": "CMake",
+      "candidates": [
+        "cmake"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "ninja",
+      "label": "Ninja",
+      "candidates": [
+        "ninja",
+        "ninja-build"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "gdb",
+      "label": "GDB",
+      "candidates": [
+        "gdb"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "system-python",
+      "label": "Python（系统版本）",
+      "candidates": [
+        "/usr/bin/python3",
+        "/bin/python3"
+      ],
+      "args": [
+        "--version"
+      ]
+    },
+    {
+      "key": "cuda",
+      "label": "CUDA Toolkit",
+      "candidates": [
+        "/usr/local/cuda/bin/nvcc",
+        "nvcc"
+      ],
+      "args": [
+        "--version"
+      ],
+      "version_contains": "release"
+    },
+    {
+      "key": "nvidia-driver",
+      "label": "NVIDIA 驱动",
+      "candidates": [
+        "nvidia-smi"
+      ],
+      "args": [
+        "--query-gpu=driver_version",
+        "--format=csv,noheader"
+      ],
+      "version_must_succeed": true
+    }
+  ]
+}

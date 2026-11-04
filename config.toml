@@ -1,0 +1,10 @@
+# Development defaults; production must use TLS and secure cookies.
+mode = "development"
+host = "127.0.0.1"
+port = 8443
+runtime_dir = "runtime"
+session_seconds = 28800
+snapshot_seconds = 3600
+login_seconds = 3600
+ssh_timeout = 30
+ssh_concurrency = 4

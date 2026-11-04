@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>算力控制台</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/dialogs.js" defer></script>
+  <script src="/static/charts.js" defer></script>
+  <script src="/static/guides.js" defer></script>
+  <script src="/static/admin.js" defer></script>
+  <script src="/static/portal.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">◈ <span>算力控制台</span></a><span class="network">局域网 · Linux</span><button type="button" id="operation-guide" hidden>使用指南</button><button type="button" id="development-guide" hidden>开发工具说明</button><button type="button" id="system-dependencies" hidden>申请管理权限</button><button type="button" id="contact-admin" hidden>联系管理员</button><button type="button" id="theme-toggle">夜间模式</button><div id="identity"></div></header>
+  <div id="notice" role="status" hidden></div>
+  <main>
+    <section id="welcome">
+      <div class="eyebrow">COMPUTE CONTROL</div><h1>申请你的算力账号。</h1>
+      <p class="intro">查看机器状态，使用登记姓名进入，管理自己的账号。</p>
+      <p id="bootstrap" class="muted" hidden>管理员尚未初始化，请由控制主机管理员完成初始化。</p>
+      <form id="login-form" class="panel login">
+        <div class="login-heading"><h2 id="login-title">申请者模式</h2><button type="button" id="admin-entry" disabled>管理员入口</button></div>
+        <label id="login-label" for="login-name">登记姓名（英文字母不区分大小写）</label><input id="login-name" name="username" required maxlength="80" autocomplete="username">
+        <div id="login-password-wrap" hidden><label for="login-password">管理员密码</label><input id="login-password" name="password" type="password" maxlength="256" autocomplete="current-password"></div>
+        <button class="primary" type="submit" disabled>进入</button>
+      </form>
+    </section>
+    <section id="console" hidden>
+      <div class="section-head"><div><div class="eyebrow" id="role-label"></div><h1 id="page-title">机器概览</h1></div><div id="page-actions"></div></div>
+      <nav id="tabs" aria-label="控制台导航"></nav>
+      <div id="summary" class="summary"></div>
+      <section id="content" aria-live="polite"></section>
+      <p class="muted footnote">后台每小时探测，页面按操作更新；可申请刷新当前状态，下拉展开最近 24 小时真实历史采样。账号不代表独占机器或 GPU。</p>
+    </section>
+  </main>
+  <dialog id="machine-dialog"><form id="machine-form"><h2>添加算力机</h2><p class="muted">填写管理凭据后直接检查并添加，不影响机器上的已有账号。</p>
+    <label>机器名称<input name="name" required maxlength="80"></label>
+    <div class="fields"><label>IP 地址<input name="host" required maxlength="64"></label><label>SSH 端口<input name="port" type="number" min="1" max="65535" value="22" required></label></div>
+    <label>已有管理用户名<input name="username" required autocomplete="off"></label>
+    <label>SSH 密码<input name="ssh_password" type="password" required autocomplete="new-password"></label>
+    <label>sudo 密码（免密时可留空）<input name="sudo_password" type="password" autocomplete="new-password"></label>
+    <label>归档根目录<input name="archive_root" value="/var/lib/compute-control/archives" required></label>
+    <label class="check"><input name="available" type="checkbox">能力检查通过后开放申请</label>
+    <footer><button type="button" data-close>取消</button><button class="primary" type="submit">检查并添加</button></footer>
+  </form></dialog>
+  <dialog id="person-dialog"><form id="person-form"><h2>维护申请者</h2>
+    <label>登记姓名<input name="name" required maxlength="80"></label>
+    <label>个人账号上限<input name="quota" type="number" min="0" max="1000000" placeholder="留空使用全局默认值"></label>
+    <label class="check"><input name="enabled" type="checkbox" checked>允许进入与申请</label>
+    <p class="muted">登记即代表审核通过。停用姓名或降低额度不会自动删除机器账号。</p>
+    <footer><button type="button" data-close>取消</button><button class="primary" type="submit">保存</button></footer>
+  </form></dialog>
+  <dialog id="account-dialog"><form id="account-form"><h2>申请机器账号</h2>
+    <label id="owner-wrap">所属申请者<select name="person_id"></select></label>
+    <label>机器<select name="machine_id" required></select></label>
+    <label>Linux 用户名<input name="username" pattern="[a-z][a-z0-9_\-]{0,31}" maxlength="32" required autocomplete="off"></label>
+    <label>登录密码（至少 3 个字符）<input name="password" type="password" minlength="3" maxlength="256" required autocomplete="new-password"></label>
+    <p class="muted">普通 Linux 账号，每人默认共 3 个，同一台机器可申请多个，计入个人总额度。提交后立即创建，请妥善保存密码。</p>
+    <footer><button type="button" data-close>取消</button><button class="primary" type="submit">立即申请</button></footer>
+  </form></dialog>
+  <dialog id="password-dialog"><form id="password-form"><h2>为原任务重新输入密码</h2>
+    <label>机器登录密码（至少 3 个字符）<input name="password" type="password" minlength="3" maxlength="256" required autocomplete="new-password"></label>
+    <footer><button type="button" data-close>取消</button><button class="primary" type="submit">继续原任务</button></footer>
+  </form></dialog>
+  <dialog id="guide-dialog" aria-labelledby="guide-title"><h2 id="guide-title" tabindex="-1" autofocus>开发工具说明</h2><div id="guide-content"></div></dialog>
+  <dialog id="adopt-dialog"><form id="adopt-form"><h2>接管已有普通账号</h2>
+    <label>机器<select name="machine_id" required></select></label><label>账号<select name="username" required></select></label>
+    <label>归属姓名<select name="person_id" required></select></label>
+    <label>已知密码（选填，仅加密记录）<input name="password" type="password" maxlength="256" autocomplete="new-password"></label>
+    <p id="adopt-hint" class="muted"></p><p class="muted">未留存的旧密码无法从哈希还原，接管后可由管理员重设。</p>
+    <footer><button type="button" data-close>取消</button><button type="submit" class="primary">确认接管</button></footer></form></dialog>
+  <dialog id="assignment-dialog"><form id="assignment-form"><h2 id="assignment-title">重新分配账号</h2>
+    <label>新归属姓名<select name="person_id" required></select></label>
+    <p class="muted">只调整平台归属及额度，保留 Linux 用户与数据；如需停止旧持有人使用原密码，请另行重设密码。</p>
+    <footer><button type="button" data-close>取消</button><button type="submit" class="primary">确认分配</button></footer></form></dialog>
+  <dialog id="admin-password-dialog"><form id="admin-password-form"><h2 id="admin-password-title">管理账号密码</h2>
+    <label>操作<select name="operation"><option value="record">仅记录已知密码</option><option value="reset">重设机器登录密码</option></select></label>
+    <label>密码<input name="password" type="password" required minlength="1" maxlength="256" autocomplete="new-password"></label>
+    <p class="muted">仅记录不会改动远端密码；重设需要至少 3 字符。已移出名单或停用人员的留存密码仅管理员可查看。</p>
+    <footer><button type="button" data-close>取消</button><button type="submit" class="primary">提交</button></footer></form></dialog>
+  <dialog id="reveal-dialog"><h2 id="reveal-title">留存密码</h2><input id="revealed-password" readonly aria-label="留存密码"><footer><button type="button" data-close>关闭并清除显示</button></footer></dialog>
+  <dialog id="pinned-dialog"><h2>置顶公告</h2><div id="pinned-content"></div><footer><button type="button" data-close>我已了解</button></footer></dialog>
+  <dialog id="announcement-dialog"><form id="announcement-form"><h2>发布公告</h2><label>标题<input name="title" required maxlength="160"></label><label>公告内容<textarea name="content" required maxlength="12000" rows="8"></textarea></label><label class="check"><input type="checkbox" name="pinned">置顶，用户登录后弹窗</label><footer><button type="button" data-close>取消</button><button type="submit" class="primary">发布</button></footer></form></dialog>
+  <dialog id="contact-dialog"><form id="contact-form"><h2>管理员联系人</h2><label>姓名<input name="name" required maxlength="80"></label><label>联系方式<textarea name="contact" required maxlength="2000" rows="4"></textarea></label><p class="muted">用于联系展示，不创建控制台登录账号。</p><footer><button type="button" data-close>取消</button><button type="submit" class="primary">保存联系人</button></footer></form></dialog>
+  <dialog id="permission-dialog"><form id="permission-form"><h2>申请管理权限</h2><label>机器账号<select name="account_id" required></select></label><label>简单事由<textarea name="reason" required maxlength="2000" rows="4" placeholder="例如：需要安装某个开发依赖及所需版本"></textarea></label><p class="muted">由管理员判断协助安装，或向该账号开通 sudo 管理员权限。</p><footer><button type="button" data-close>取消</button><button type="submit" class="primary">提交申请</button></footer></form></dialog>
+  <dialog id="permission-decision-dialog"><form id="permission-decision-form"><h2>处理管理权限申请</h2><p id="permission-reason" class="plain-text"></p><label>处理方式<select name="action"><option value="help_install">由管理员帮助安装</option><option value="grant">开通账号管理员权限</option><option value="reject">拒绝申请</option></select></label><label>回复<textarea name="response" maxlength="2000" rows="4"></textarea></label><footer><button type="button" data-close>取消</button><button type="submit" class="primary">确认处理</button></footer></form></dialog>
+  <dialog id="machine-info-dialog" aria-labelledby="machine-info-title"><h2 id="machine-info-title"></h2><div id="machine-info-content"></div><footer><button type="button" data-close>关闭</button></footer></dialog>
+  <dialog id="machine-notes-dialog"><form id="machine-notes-form"><h2 id="machine-notes-title">机器备注</h2><label>补充备注<textarea name="content" required maxlength="4000" rows="4" placeholder="填写机器使用情况、环境说明或注意事项"></textarea></label><p class="muted">备注会显示给能看到这台机器的管理员和申请者，保留填写人和时间。</p><footer><button type="button" data-close>取消</button><button type="submit" class="primary">发布备注</button></footer><h3>历史备注</h3><div id="machine-notes-history"></div></form></dialog>
+  <dialog id="contact-admin-dialog"><h2>联系管理员</h2><p id="contact-text" class="plain-text"></p><div id="contact-directory"></div><p id="contact-empty" class="muted" hidden>暂未配置联系方式，请通过公司已有渠道联系管理员。</p><p class="muted">所有申请提交后，请主动联系管理员，提醒查看并处理申请；提交操作不会自动发送通知。</p></dialog>
+  <dialog id="alert-dialog" role="alertdialog" aria-describedby="alert-message"><h2 id="alert-title">操作提示</h2><p id="alert-message" class="plain-text"></p></dialog>
+</body>
+</html>

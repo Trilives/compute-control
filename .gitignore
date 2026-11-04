@@ -1,0 +1,27 @@
+# Private operator notes may contain plaintext credentials.
+/docs/private/
+
+# Runtime secrets and local state must not be committed.
+.env
+.env.*
+!.env.example
+/runtime/
+/backups/
+
+# Local dependencies, caches, and packaging outputs.
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+/dist/
+
+# Local database copies and TLS/private key material.
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.pem
+*.key
