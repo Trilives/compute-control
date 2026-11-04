@@ -57,7 +57,7 @@ def test_browser_embeds_markdown_and_local_images_without_pdf_or_iframe(app, liv
     expect(page.get_by_role("link", name="下载 PDF", exact=True)).to_have_count(0)
     guide.locator("img").evaluate_all("nodes=>nodes.forEach(node=>node.loading='eager')")
     page.wait_for_function(
-        "[...document.querySelectorAll('#guide-content img')].every(img=>img.complete&&img.naturalWidth>0)"
+        "() => [...document.querySelectorAll('#guide-content img')].every(img=>img.complete&&img.naturalWidth>0)"
     )
     for width in [1440, 390]:
         page.set_viewport_size({"width": width, "height": 1000})

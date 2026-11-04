@@ -91,7 +91,7 @@
 | `docs/records/2026-11-04-ui-review-and-public-release.md` | 120 | 51 | 无 | 一次全面检查、界面调整、限频、姓名匹配及公开发布的验收交接 |
 
 | `tests/test_note_deletion.py` | 190 | 112 | 无 | 备注归属、机器可见性、CSRF、审计和真实浏览器删除交互 |
-| `tests/test_illustrated_guides.py` | 150 | 76 | 无 | 分角色 HTML/PDF、路径隔离、CSP、登录退出和真实浏览器教程 |
+| `tests/test_illustrated_guides.py` | 150 | 76 | 无 | 分角色 Markdown、本地图片、安全路径、登录退出和不读取运行资料 |
 | `tests/test_machine_ledger.py` | 120 | 41 | 无 | 按机器分组、跨人员账号归属及 sudo 滑动开关 |
 | `docs/records/2026-11-04-notes-and-role-guides.md` | 120 | 35 | 无 | 备注删除、机器台账、分角色图文教程及部署验收 |
 
@@ -111,6 +111,8 @@
 | `docs/records/2026-11-04-v0.2.0-release.md` | 120 | 40 | 无 | 面向公开发行的传输、界面、活跃时间与隐私验收记录 |
 
 | `docs/records/2026-11-04-v0.2.1-guide-isolation.md` | 100 | 25 | 无 | Web 通用图文与线下资料的目录隔离、链接拒绝及公开文本检查 |
+
+| `docs/records/2026-11-04-v0.2.2-markdown-guides.md` | 100 | 25 | 无 | 内嵌 Markdown 通用图文、演示图片、安全渲染与私密 PDF 分离 |
 
 ## 清理时如何使用
 

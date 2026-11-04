@@ -24,6 +24,12 @@ window.Guides = (() => {
         const contents = []; while (++index < lines.length && !lines[index].startsWith('```')) contents.push(lines[index]);
         const pre = el('pre'); pre.append(el('code', contents.join('\n'))); root.append(pre); list = null; continue;
       }
+      const image = line.trim().match(/^!\[([^\]]*)\]\(\.\.\/src\/compute_control\/static\/guide-images\/([a-z0-9][a-z0-9_-]*\.png)\)$/);
+      if (image) {
+        const figure = el('figure', undefined, 'guide-figure'), picture = el('img');
+        picture.src = '/static/guide-images/' + image[2]; picture.alt = image[1]; picture.loading = 'lazy'; picture.decoding = 'async';
+        figure.append(picture, el('figcaption', image[1])); root.append(figure); list = null; continue;
+      }
       const heading = line.match(/^(#{1,6})\s+(.+)$/);
       if (heading) { const node = el('h' + heading[1].length); inline(node, heading[2]); root.append(node); list = null; continue; }
       if (line.startsWith('|') && lines[index + 1]?.match(/^\|[\s:|\-]+\|$/)) {
@@ -46,7 +52,6 @@ window.Guides = (() => {
     Dialogs.open('#guide-dialog');
   }
   async function development(systemOnly) {
-    $('#guide-dialog').classList.remove('illustrated-guide');
     const guide = await api('/guides'); $('#guide-title').textContent = systemOnly ? '需要管理员安装的系统依赖' : guide.title;
     const rows = systemOnly ? guide.rows.filter(row => row.level.includes('系统级')) : guide.rows;
     $('#guide-content').replaceChildren(table(['工具', '推荐层级', '说明'], rows.map(row => [row.tool, row.level, row.description])), el('p', guide.system_note, 'muted'));
@@ -54,16 +59,7 @@ window.Guides = (() => {
   }
   async function operation() {
     const guide = await api('/operation-guide'); $('#guide-title').textContent = guide.title;
-    $('#guide-dialog').classList.toggle('illustrated-guide', guide.format === 'html');
-    if (guide.format === 'html') {
-      const toolbar = el('div', undefined, 'tutorial-toolbar'), download = el('a', '下载 PDF', 'tutorial-download');
-      download.href = guide.download_url; download.target = '_blank'; download.rel = 'noopener';
-      toolbar.append(el('span', '按目录阅读，或下载保存。', 'muted'), download);
-      const frame = el('iframe'); frame.id = 'operation-guide-frame'; frame.title = guide.title;
-      frame.src = guide.document_url; frame.referrerPolicy = 'no-referrer';
-      frame.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
-      $('#guide-content').replaceChildren(toolbar, frame);
-    } else $('#guide-content').replaceChildren(markdown(guide.markdown));
+    $('#guide-content').replaceChildren(markdown(guide.markdown));
     open();
   }
   return { development, operation, markdown };

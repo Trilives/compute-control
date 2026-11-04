@@ -355,7 +355,7 @@ Agent 可在现有职责和已确认计划内自主实现。增加独立职责�
 
 ## 12. 文档与实现交付顺序
 
-公开的架构、[管理员操作指南](docs/ADMIN_GUIDE.md)和[申请者指南](docs/USER_GUIDE.md)独立维护，文字指南随发行包提供。正式模式的图文教程由维护人安装到运行目录 `web-tutorials/admin.html`、`admin.pdf`、`applicant.html`、`applicant.pdf`；`/api/operation-guide` 返回受保护的 HTML/PDF 入口，服务端仅按实际会话角色选文件，拒绝匿名读取。隔离 iframe 禁止脚本执行，HTML 文档仅允许同源嵌入、内联样式与 data 图片，退出或切换身份清除文档；缺少图文产物时回退文字指南。Web UI 只读取独立的 `web-tutorials` 目录，旧 `tutorials` 或 `internal-tutorials` 中的内部分发资料不作为回退来源。实际凭据和私密维护资料由部署者单独保管，不进入公开发行包。
+公开的架构、[管理员操作指南](docs/ADMIN_GUIDE.md)和[申请者指南](docs/USER_GUIDE.md)独立维护。Web UI 只展示随包的通用 Markdown 及演示配图，`/api/operation-guide` 按实际会话角色返回对应内容，忽略角色或路径覆盖参数；不读取运行目录中的 HTML/PDF/Markdown，也不提供图文文档或 PDF 下载接口。浏览器使用安全 DOM 渲染标题、列表、表格、代码与图片，不解析原始 HTML；只允许约定的本地演示 PNG 路径，不自动加载外站、数据 URI 或私密路径图片。退出或切换身份清除指南内容。内部分发 PDF、实际凭据及现场维护资料由部署者另行保管，不进入公开发行包。
 
 1. 基础框架：空机器列表、单管理员初始化、姓名名单、默认/个人额度、权限与会话。
 2. 机器接入与只读监控：SSH 能力检测、历史账号展示、小时后台采集、历史折线与不完整统计标记。

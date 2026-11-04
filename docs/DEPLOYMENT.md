@@ -39,11 +39,13 @@
 
 申请者姓名入口适用于可信环境，不是密码或强身份认证。面向不可信来源时需增加可靠访问控制，不能仅依靠 HTTPS 替代身份校验。
 
-## 角色图文指南
+## Web UI 通用图文指南
 
-内置文字指南随包提供。可在 `<runtime_dir>/web-tutorials/` 安装自备的 `admin.html`、`admin.pdf`、`applicant.html`、`applicant.pdf`；目录及文件仅允许服务身份读取。
+管理员和申请者的通用指南以 Markdown 随包提供，配图来自独立演示数据，位于 `src/compute_control/static/guide-images/`。Git 仓库可直接预览相同的 Markdown 与图片；网页按实际会话角色嵌入渲染，不需要安装 PDF、HTML 或额外文档服务。
 
-文件按实际会话角色返回，申请者不能用查询参数读取管理员版，匿名请求被拒绝。HTML 应自包含图片与样式；页面以禁止脚本的 iframe 展示。缺少对应 HTML/PDF 时回退文字指南。Web UI 通用图文只放操作说明；现场部署和接入资料应另行线下分发，不放在 `web-tutorials`。旧 `tutorials` 和 `internal-tutorials` 不会被 Web UI 自动读取。
+修改通用指南时，同时维护 Markdown 中的相对图片引用与本地静态图片。渲染器支持标题、列表、表格、代码、粗体、行内代码、HTTP(S) 链接及约定的演示 PNG 图片；不执行原始 HTML 或脚本，也不自动请求外部图片。
+
+运行目录中以前安装的 `tutorials`、`internal-tutorials` 或 `web-tutorials` 文件不会被 Web UI 读取，旧文档与下载端点不再提供。内部分发 PDF 可单独保存和分发，现场连接、部署及登录资料不放入通用 Markdown、演示图片或公开附件。
 
 ## 升级、备份与回滚
 

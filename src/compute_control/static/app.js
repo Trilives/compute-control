@@ -50,7 +50,7 @@ async function boot() {
   loadRevision++;
   const previousRole = state.role;
   const data = await api('/auth/me'); Object.assign(state, data);
-  if (previousRole !== state.role) { ComputeCharts.clear(); state.showCleared = false; $('#guide-content').replaceChildren(); $('#guide-dialog').classList.remove('illustrated-guide'); }
+  if (previousRole !== state.role) { ComputeCharts.clear(); state.showCleared = false; $('#guide-content').replaceChildren(); }
   if (state.role === 'anonymous') {
     Dialogs.clearAlerts();
     document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
