@@ -56,7 +56,6 @@ def test_admin_and_applicant_browser_flow(app):
                 "host": "192.0.2.100",
                 "username": "operator",
                 "ssh_password": "example-password",
-                "sudo_password": "example-password",
             }.items():
                 form.locator(f"input[name={field}]").fill(value)
             form.locator("button[type=submit]").click()
@@ -64,7 +63,6 @@ def test_admin_and_applicant_browser_flow(app):
             page.get_by_role("button", name="管理机器", exact=True).click()
             page.get_by_role("button", name="更新凭据").click()
             form.locator("input[name=ssh_password]").fill("updated-example-password")
-            form.locator("input[name=sudo_password]").fill("updated-example-password")
             form.locator("button[type=submit]").click()
             expect(page.locator("#machine-dialog")).not_to_be_visible()
             target = app.state.db.one("SELECT * FROM machines")

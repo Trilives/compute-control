@@ -203,7 +203,7 @@ function openMachine(machine) {
     for (const key of ['name', 'host', 'port', 'username', 'archive_root']) form.elements[key].value = machine[key];
     form.elements.available.checked = Boolean(machine.available);
   }
-  Dialogs.open('#machine-dialog');
+  Credentials.machineMode(machine); Dialogs.open('#machine-dialog');
 }
 function openPerson(person) {
   const form = $('#person-form'); form.reset(); form.dataset.personId = person?.id || '';
@@ -247,7 +247,7 @@ $('#machine-info-dialog').addEventListener('close', () => $('#machine-info-conte
 document.querySelectorAll('[data-close]').forEach(node => node.addEventListener('click', () => node.closest('dialog').close()));
 onSubmit('#login-form', async form => { await api('/auth/login', 'POST', { role: state.mode, username: form.elements.username.value.trim(), password: form.elements.password.value }); form.reset(); await boot(); if (state.role === 'applicant') await Portal.pinned(); });
 onSubmit('#person-form', async form => { const data = { name: form.elements.name.value.trim(), quota: form.elements.quota.value === '' ? null : Number(form.elements.quota.value), enabled: form.elements.enabled.checked }; await api('/admin/applicants' + (form.dataset.personId ? '/' + form.dataset.personId : ''), form.dataset.personId ? 'PUT' : 'POST', data); $('#person-dialog').close(); await load(); });
-onSubmit('#machine-form', async form => { const data = Object.fromEntries(new FormData(form)); data.port = Number(data.port); data.available = form.elements.available.checked; await api('/admin/machines' + (form.dataset.machineId ? '/' + form.dataset.machineId : ''), form.dataset.machineId ? 'PUT' : 'POST', data); form.reset(); $('#machine-dialog').close(); await load(); });
+onSubmit('#machine-form', async form => { const data = Object.fromEntries(new FormData(form)); data.port = Number(data.port); data.available = form.elements.available.checked; data.separate_sudo_password = form.elements.separate_sudo_password.checked; await api('/admin/machines' + (form.dataset.machineId ? '/' + form.dataset.machineId : ''), form.dataset.machineId ? 'PUT' : 'POST', data); await load(); form.reset(); $('#machine-dialog').close(); });
 onSubmit('#account-form', async form => { const data = Object.fromEntries(new FormData(form)); if (state.role !== 'admin') delete data.person_id; data.request_key = form.dataset.requestKey; await api('/accounts', 'POST', data); form.reset(); $('#account-dialog').close(); state.tab = 'jobs'; await load(); notify('已提交。若提示等待密码，请先确认 worker 已启动，再在原任务重新输入。'); });
 onSubmit('#password-form', async form => { await api(`/jobs/${form.dataset.jobId}/password`, 'POST', { password: form.elements.password.value }); form.reset(); $('#password-dialog').close(); await load(); });
 $('#development-guide').addEventListener('click', () => Guides.development(false).catch(error => notify(error.message, true)));

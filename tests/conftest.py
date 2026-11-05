@@ -109,6 +109,7 @@ def machine(app, host="192.0.2.1", available=True):
             "username": "operator",
             "ssh_password": "example-ssh-credential",
             "sudo_password": "example-sudo-credential",
+            "separate_sudo_password": True,
             "fingerprint": "SHA256:" + "A" * 43,
             "archive_root": "/var/lib/compute-control/archives",
             "available": available,

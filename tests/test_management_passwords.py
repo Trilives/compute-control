@@ -173,7 +173,9 @@ def test_same_login_and_sudo_password_rotate_together_and_busy_jobs_refuse(app, 
         conn.execute("UPDATE jobs SET state='cancelled' WHERE id=?", (job["id"],))
     assert client.post(url, json=change()).json()["state"] == "verified"
     current = app.state.db.one("SELECT credentials FROM machines WHERE id=?", (target["id"],))
-    assert set(vault.decrypt(current["credentials"]).values()) == {NEW_PASSWORD}
+    saved = vault.decrypt(current["credentials"])
+    assert saved["ssh_password"] == saved["sudo_password"] == NEW_PASSWORD
+    assert saved["separate_sudo_password"] is False
 
 
 def test_invalid_existing_credentials_do_not_reserve_change_or_leak_errors(app, client):

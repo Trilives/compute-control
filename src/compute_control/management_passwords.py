@@ -6,6 +6,22 @@ import uuid
 from .security import DomainError, validate_password
 
 
+def uses_separate_sudo(credentials):
+    # Older records have no choice flag: preserve their working authentication setup.
+    return credentials.get(
+        "separate_sudo_password", credentials["sudo_password"] != credentials["ssh_password"]
+    )
+
+
+def machine_credentials(data):
+    separate = data.get("separate_sudo_password", False)
+    return {
+        "ssh_password": data["ssh_password"],
+        "sudo_password": data.get("sudo_password", "") if separate else data["ssh_password"],
+        "separate_sudo_password": separate,
+    }
+
+
 class ManagementPasswords:
     def change_management_password(self, machine_id, password):
         validate_password(password, minimum=3)
@@ -25,8 +41,8 @@ class ManagementPasswords:
         old = self.secrets.decrypt(machine["credentials"])
         if password == old["ssh_password"]:
             raise DomainError("新密码不能与当前机器密码相同")
-        revised = dict(old, ssh_password=password)
-        if old["sudo_password"] == old["ssh_password"]:
+        revised = dict(old, ssh_password=password, separate_sudo_password=uses_separate_sudo(old))
+        if not revised["separate_sudo_password"]:
             revised["sudo_password"] = password
         encrypted = self.secrets.encrypt(revised)
         change_id, now = uuid.uuid4().hex, time.time()

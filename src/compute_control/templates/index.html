@@ -41,8 +41,10 @@
     <label>机器名称<input name="name" required maxlength="80"></label>
     <div class="fields"><label>IP 地址<input name="host" required maxlength="64"></label><label>SSH 端口<input name="port" type="number" min="1" max="65535" value="22" required></label></div>
     <label>已有管理用户名<input name="username" required autocomplete="off"></label>
-    <label>SSH 密码<input name="ssh_password" type="password" required autocomplete="new-password"></label>
-    <label>sudo 密码（免密时可留空）<input name="sudo_password" type="password" autocomplete="new-password"></label>
+    <label>管理账号密码（SSH）<input name="ssh_password" type="password" required autocomplete="new-password"></label>
+    <label class="check"><input name="separate_sudo_password" type="checkbox">使用独立 sudo 密码</label>
+    <p class="muted">默认 sudo 使用管理账号密码，改密时同步更新。仅特殊认证配置需要勾选独立密码。</p>
+    <label id="separate-sudo-wrap" hidden>独立 sudo 密码（免密时可留空）<input name="sudo_password" type="password" disabled autocomplete="new-password"></label>
     <label>归档根目录<input name="archive_root" value="/var/lib/compute-control/archives" required></label>
     <label class="check"><input name="available" type="checkbox">能力检查通过后开放申请</label>
     <footer><button type="button" data-close>取消</button><button class="primary" type="submit">检查并添加</button></footer>
@@ -59,7 +61,8 @@
     <label>当前网页管理密码<input name="current_password" type="password" required maxlength="256" autocomplete="current-password"></label>
     <label>新机器管理密码（至少 3 个字符）<input name="new_password" type="password" required minlength="3" maxlength="256" autocomplete="new-password"></label>
     <label>再次输入新密码<input name="confirm_password" type="password" required minlength="3" maxlength="256" autocomplete="new-password"></label>
-    <p class="muted">实际修改此机器 SSH 管理账号的登录密码，并验证新连接后同步系统凭据。sudo 与 SSH 原先同密码时同步修改；免密及独立 sudo 密码保持原设置。</p>
+    <p class="muted">实际修改此机器管理账号的登录密码，并验证新连接后同步系统凭据。</p>
+    <p id="management-password-sudo-mode" class="muted"></p>
     <footer><button class="primary" type="submit">修改并验证连接</button></footer>
   </form></dialog>
   <dialog id="person-dialog"><form id="person-form"><h2>维护申请者</h2>

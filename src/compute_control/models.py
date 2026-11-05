@@ -49,7 +49,8 @@ class Machine(Target):
     name: str = Field(min_length=1, max_length=80)
     username: str = Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
     ssh_password: SecretStr
-    sudo_password: SecretStr
+    sudo_password: SecretStr = SecretStr("")
+    separate_sudo_password: bool = Field(default=False, strict=True)
     # Accepted for older clients; enrollment obtains the key on the server.
     fingerprint: str | None = Field(default=None, pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
     archive_root: str = "/var/lib/compute-control/archives"

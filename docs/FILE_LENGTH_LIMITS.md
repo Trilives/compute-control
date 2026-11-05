@@ -93,6 +93,7 @@
 | `tests/test_note_deletion.py` | 190 | 112 | 无 | 备注归属、机器可见性、CSRF、审计和真实浏览器删除交互 |
 | `tests/test_illustrated_guides.py` | 150 | 76 | 无 | 分角色 Markdown、本地图片、安全路径、登录退出和不读取运行资料 |
 | `tests/test_machine_ledger.py` | 120 | 41 | 无 | 按机器分组、跨人员账号归属及 sudo 滑动开关 |
+| `tests/test_sudo_credentials.py` | 220 | 159 | 无 | 管理密码默认同步、显式独立模式、旧凭据兼容和录入浏览器回归 |
 | `docs/records/2026-11-04-notes-and-role-guides.md` | 120 | 35 | 无 | 备注删除、机器台账、分角色图文教程及部署验收 |
 
 | `src/compute_control/management_passwords.py` | 180 | 111 | 无 | 管理连接凭据的加密候选、远端改密及断线核查，不自动重放 |
@@ -114,6 +115,7 @@
 
 | `docs/records/2026-11-04-v0.2.2-markdown-guides.md` | 100 | 25 | 无 | 内嵌 Markdown 通用图文、演示图片、安全渲染与私密 PDF 分离 |
 | `docs/records/2026-11-05-applicant-ledger-columns.md` | 50 | 9 | 无 | 申请者移除重复姓名列及管理员归属展示回归与部署记录 |
+| `docs/records/2026-11-05-explicit-sudo-password-mode.md` | 70 | 16 | 无 | 默认同步、显式独立 sudo 凭据、旧记录兼容及测试部署交接 |
 
 ## 清理时如何使用
 

@@ -9,7 +9,7 @@ from pathlib import PurePosixPath
 
 from .account_admin import AccountAdministration
 from .db import encode
-from .management_passwords import ManagementPasswords
+from .management_passwords import ManagementPasswords, machine_credentials, uses_separate_sudo
 from .portal import PortalOperations
 from .security import DomainError, validate_password
 
@@ -116,6 +116,9 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
         for row in rows:
             if session["role"] == "admin":
                 row["management_password_pending"] = row["id"] in pending
+                row["separate_sudo_password"] = uses_separate_sudo(
+                    self.secrets.decrypt(row["credentials"])
+                )
             for secret in ["credentials", "host_key"]:
                 row.pop(secret)
             row["capabilities"] = json.loads(row["capabilities"])
@@ -179,9 +182,7 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
         path = PurePosixPath(data["archive_root"])
         if not path.is_absolute() or ".." in path.parts or str(path) in ["/", "/home"]:
             raise DomainError("归档根目录必须为独立的绝对路径")
-        credentials = self.secrets.encrypt(
-            {key: data[key] for key in ["ssh_password", "sudo_password"]}
-        )
+        credentials = self.secrets.encrypt(machine_credentials(data))
         machine = {key: data[key] for key in ["name", "host", "port", "username", "archive_root"]}
         host = self.remote.identify(data["host"], data["port"])
         machine.update(
@@ -449,9 +450,7 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
             machine,
             **{key: data[key] for key in ["host", "port", "username", "archive_root", "name"]},
         )
-        revised["credentials"] = self.secrets.encrypt(
-            {key: data[key] for key in ["ssh_password", "sudo_password"]}
-        )
+        revised["credentials"] = self.secrets.encrypt(machine_credentials(data))
         report = self.remote.execute(
             revised, "inspect", {"include_logins": True, "include_tools": True}
         )

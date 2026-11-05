@@ -1,6 +1,15 @@
 'use strict';
 // Forms never preload a stored password; closing either form clears every secret input.
 window.Credentials = (() => {
+  function toggleSudoInput() {
+    const form = $('#machine-form'), separate = form.elements.separate_sudo_password.checked;
+    $('#separate-sudo-wrap').hidden = !separate; form.elements.sudo_password.disabled = !separate;
+    if (!separate) form.elements.sudo_password.value = '';
+  }
+  function machineMode(machine) {
+    $('#machine-form').elements.separate_sudo_password.checked = Boolean(machine?.separate_sudo_password);
+    toggleSudoInput();
+  }
   function webButton() {
     return button('修改网页管理密码', () => { $('#web-password-form').reset(); Dialogs.open('#web-password-dialog'); });
   }
@@ -12,6 +21,7 @@ window.Credentials = (() => {
     return button('修改机器管理密码', () => {
       const form = $('#management-password-form'); form.reset(); form.dataset.machineId = machine.id;
       $('#management-password-target').textContent = `${machine.name} · ${machine.host}:${machine.port} · SSH 管理账号：${machine.username}`;
+      $('#management-password-sudo-mode').textContent = machine.separate_sudo_password ? '此机器已启用独立 sudo 密码，改密时保留该独立凭据。' : 'sudo 与管理账号密码同步，改密时两项连接凭据一起更新。';
       Dialogs.open('#management-password-dialog');
     });
   }
@@ -21,6 +31,8 @@ window.Credentials = (() => {
     return data;
   }
   function initialize() {
+    $('#machine-form').elements.separate_sudo_password.addEventListener('change', toggleSudoInput);
+    $('#machine-dialog').addEventListener('close', () => { $('#machine-form').reset(); machineMode(); });
     for (const selector of ['#web-password-dialog', '#management-password-dialog']) {
       $(selector).addEventListener('close', () => $(selector).querySelector('form').reset());
     }
@@ -35,5 +47,5 @@ window.Credentials = (() => {
       form.reset(); $('#management-password-dialog').close(); await load(); notify(result.message, result.state === 'failed');
     });
   }
-  return { initialize, webButton, machineButton };
+  return { initialize, webButton, machineButton, machineMode };
 })();
