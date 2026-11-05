@@ -113,6 +113,7 @@
 | `docs/records/2026-11-04-v0.2.1-guide-isolation.md` | 100 | 25 | 无 | Web 通用图文与线下资料的目录隔离、链接拒绝及公开文本检查 |
 
 | `docs/records/2026-11-04-v0.2.2-markdown-guides.md` | 100 | 25 | 无 | 内嵌 Markdown 通用图文、演示图片、安全渲染与私密 PDF 分离 |
+| `docs/records/2026-11-05-applicant-ledger-columns.md` | 50 | 9 | 无 | 申请者移除重复姓名列及管理员归属展示回归与部署记录 |
 
 ## 清理时如何使用
 
