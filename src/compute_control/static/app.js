@@ -130,13 +130,13 @@ function lastActive(account) {
 }
 function renderAccountGroups(accounts, content) {
   if (!accounts.length) { content.append(empty('尚无登记账号', '申请后，这里按机器保存姓名与账号的对应关系。')); return; }
-  const groups = new Map(), showOwner = state.role === 'admin';
+  const groups = new Map(), isAdmin = state.role === 'admin';
   for (const account of accounts) { if (!groups.has(account.machine_id)) groups.set(account.machine_id, []); groups.get(account.machine_id).push(account); }
   for (const rows of [...groups.values()].sort((a, b) => a[0].machine_name.localeCompare(b[0].machine_name, 'zh-CN', { numeric: true }))) {
     const machine = rows[0], group = el('section', undefined, 'panel account-machine-group'), heading = el('div', undefined, 'account-machine-heading');
     const title = el('div'); title.append(el('h2', machine.machine_name), el('p', `${machine.host}:${machine.port}`, 'muted'));
     heading.append(title, el('span', `占用额度 ${rows.filter(account => account.occupies).length} 个 · 台账 ${rows.length} 条`, 'badge')); group.append(heading);
-    group.append(table([...(showOwner ? ['姓名'] : []), '用户名', '状态', 'sudo 权限', '最后活跃时间', '创建时间', '操作'], rows.map(account => [...(showOwner ? [account.name] : []), account.username, (labels[account.state] || account.state) + (account.ledger_cleared_at ? '（已清理）' : ''), showOwner ? Portal.permissionSwitch(account) : account.is_admin == null ? '未确认' : account.is_admin ? '有' : '无', lastActive(account), date(account.created), Portal.accountControls(account)])));
+    group.append(table([...(isAdmin ? ['姓名'] : []), '用户名', '状态', 'sudo 权限', ...(isAdmin ? ['最后活跃时间', '创建时间'] : []), '操作'], rows.map(account => [...(isAdmin ? [account.name] : []), account.username, (labels[account.state] || account.state) + (account.ledger_cleared_at ? '（已清理）' : ''), isAdmin ? Portal.permissionSwitch(account) : account.is_admin == null ? '未确认' : account.is_admin ? '有' : '无', ...(isAdmin ? [lastActive(account), date(account.created)] : []), Portal.accountControls(account)])));
     content.append(group);
   }
 }
