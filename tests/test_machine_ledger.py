@@ -32,6 +32,10 @@ def test_ledger_groups_accounts_by_machine_and_keeps_permissions(app, live_page)
     expect(second_group.locator("tbody tr")).to_have_count(1)
     expect(second_group).to_contain_text("zhang_two")
     expect(page.get_by_role("switch")).to_have_count(3)
+    expect(page.get_by_role("columnheader", name="姓名", exact=True)).to_have_count(2)
+    expect(
+        first_group.locator("tbody tr").filter(has_text="zhang_one").locator("td").first
+    ).to_have_text(first["name"])
     page.get_by_role("button", name="退出", exact=True).click()
     page.locator("#login-name").fill(first["name"])
     page.locator("#login-form button[type=submit]").click()
@@ -39,3 +43,9 @@ def test_ledger_groups_accounts_by_machine_and_keeps_permissions(app, live_page)
     expect(groups).to_have_count(2)
     expect(page.locator("#content")).not_to_contain_text("li_one")
     expect(page.get_by_role("switch")).to_have_count(0)
+    expect(page.get_by_role("columnheader", name="姓名", exact=True)).to_have_count(0)
+    expect(page.get_by_role("columnheader", name="最后活跃时间", exact=True)).to_have_count(2)
+    expect(first_group.locator("tbody tr").first.locator("td").first).to_have_text("zhang_one")
+    assert page.locator("#content tbody tr").evaluate_all(
+        "rows => rows.every(row => row.cells.length === 6)"
+    )
