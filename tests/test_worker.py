@@ -239,3 +239,14 @@ def test_three_character_password_passes_memory_handoff(app):
         assert mailbox.take(job["id"]) == "123"
     finally:
         mailbox.close()
+
+
+def test_retire_automatically_cleans_home_after_verified_archive(app):
+    owner, target = person(app), machine(app)
+    runner = worker(app)
+    created = apply(app, owner, target)
+    runner.process_job(created)
+    runner.process_job(app.state.service.retire_account({"role": "admin"}, created["account_id"]))
+    assert app.state.service.remote.calls[-2:] == [(target["id"], "retire"), (target["id"], "cleanup")]
+    assert app.state.db.one("SELECT state FROM accounts")["state"] == "retired"
+    assert app.state.service.person(owner["id"])["used"] == 0

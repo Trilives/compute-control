@@ -53,3 +53,14 @@ def test_recovery_button_restores_record_and_is_admin_only(app, live_page):
             == 403
         )
     assert app.state.service.person(owner["id"])["used"] == 1
+
+
+def test_retired_records_only_appear_in_admin_recycle_bin(app, live_page):
+    _, account_id, runner = recycled(app)
+    page = live_page
+    enter_admin(page)
+    page.locator("#tabs").get_by_role("button", name="账号台账", exact=True).click()
+    expect(page.locator("#content")).not_to_contain_text("researcher")
+    page.locator("#tabs").get_by_role("button", name="回收站", exact=True).click()
+    expect(page.locator("#content")).to_contain_text("researcher")
+    expect(page.get_by_role("button", name="恢复账号", exact=True)).to_be_visible()
