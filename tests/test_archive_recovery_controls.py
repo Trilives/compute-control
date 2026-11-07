@@ -82,6 +82,7 @@ def test_legacy_remote_recovery_can_take_new_password_without_saved_hash(sandbox
     remote.cleanup(sandbox.payload)
     receipt = json.loads(sandbox.receipt.read_text())
     receipt.pop("restore")
+    receipt["archive"] = str(sandbox.root / "missing-newer-archive.tar")
     sandbox.receipt.write_text(json.dumps(receipt))
     metadata_path = Path(result["archive"]).parent / "retirement-metadata.json"
     metadata = json.loads(metadata_path.read_text())
@@ -158,3 +159,57 @@ def test_archive_row_prompts_for_legacy_password_and_has_no_separate_recycle_tab
     expect(form.locator("[name=password]")).to_have_value("")
     runner.process_job(app.state.db.one("SELECT * FROM jobs WHERE kind='restore'"))
     assert app.state.db.one("SELECT state FROM accounts")["state"] == "active"
+
+
+def test_reconciliation_keeps_new_recovery_password_after_lost_response(app, client):
+    from compute_control.security import DomainError
+
+    _, account_id, runner = recycled(app)
+    archive = app.state.db.one("SELECT * FROM archives")
+    response = client.post(
+        f"/api/admin/archives/{archive['id']}/restore",
+        json={"confirmed": True, "password": TEST_RECOVERY_PASSWORD},
+    )
+    job_id = response.json()["id"]
+    seen = []
+
+    def execute(machine, action, data=None):
+        if action == "restore":
+            seen.append(data)
+            raise DomainError("连接中断，需核查", 502)
+        assert action == "reconcile"
+        return {
+            "state": "active",
+            "uid": 1001,
+            "home": "/home/researcher",
+            "last_restore_job": job_id,
+        }
+
+    app.state.service.remote.execute = execute
+    runner.process_job(app.state.db.one("SELECT * FROM jobs WHERE id=?", (job_id,)))
+    assert seen[0]["password"] == TEST_RECOVERY_PASSWORD
+    assert "restore_credential_cipher" not in seen[0]
+    runner.process_job(app.state.service.admin_job("reconcile", account_id))
+    account = app.state.db.one("SELECT * FROM accounts WHERE id=?", (account_id,))
+    assert (
+        app.state.service.secrets.decrypt(account["credential_cipher"])["password"]
+        == TEST_RECOVERY_PASSWORD
+    )
+    assert app.state.db.one("SELECT state FROM jobs WHERE id=?", (job_id,))["state"] == "succeeded"
+
+
+def test_member_cannot_restore_an_archive(app, client):
+    from conftest import login
+    from fastapi.testclient import TestClient
+
+    owner, _, _ = recycled(app)
+    archive = app.state.db.one("SELECT * FROM archives")
+    with TestClient(app) as member:
+        login(member, "applicant", owner["name"], "")
+        assert (
+            member.post(
+                f"/api/admin/archives/{archive['id']}/restore",
+                json={"confirmed": True, "password": TEST_RECOVERY_PASSWORD},
+            ).status_code
+            == 403
+        )

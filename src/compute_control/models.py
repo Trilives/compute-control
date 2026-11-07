@@ -83,6 +83,10 @@ class Confirm(Input):
     confirmed: bool
 
 
+class ArchiveRestore(Confirm):
+    password: SecretStr | None = None
+
+
 class PersonDeletion(Confirm):
     review_token: str = Field(pattern=r"^[a-f0-9]{64}$")
 

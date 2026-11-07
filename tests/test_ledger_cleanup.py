@@ -152,26 +152,16 @@ def test_v3_migration_backups_and_retains_records_without_duplicate_history(app)
     )
 
 
-def test_ledger_cleanup_and_restore_browser_flow(app, live_page):
-    from conftest import ADMIN_PASSWORD
+def test_archives_retain_restore_controls_when_legacy_ledger_is_hidden(app, live_page):
     from playwright.sync_api import expect
+    from test_machine_management_ui import enter_admin
 
-    retired_account(app)
+    _, account_id = retired_account(app)
+    app.state.service.set_ledger_cleared({"role": "admin"}, account_id, True)
     page = live_page
-    page.get_by_role("button", name="管理员入口", exact=True).click()
-    page.locator("#login-name").fill("admin")
-    page.locator("#login-password").fill(ADMIN_PASSWORD)
-    page.locator("#login-form button[type=submit]").click()
-    page.get_by_role("button", name="回收站", exact=True).click()
-    expect(page.get_by_role("button", name="清理台账", exact=True)).to_be_visible()
-    page.once("dialog", lambda dialog: dialog.dismiss())
-    page.get_by_role("button", name="清理台账", exact=True).click()
-    expect(page.get_by_role("button", name="清理台账", exact=True)).to_be_visible()
-    page.once("dialog", lambda dialog: dialog.accept())
-    page.get_by_role("button", name="清理台账", exact=True).click()
-    expect(page.get_by_role("button", name="清理台账", exact=True)).to_have_count(0)
-    page.get_by_label("显示已清理账号", exact=True).check()
-    expect(page.locator("#content")).to_contain_text("已清理")
-    page.get_by_role("button", name="恢复显示", exact=True).click()
-    expect(page.get_by_role("button", name="清理台账", exact=True)).to_be_visible()
-    expect(page.get_by_role("button", name="恢复显示", exact=True)).to_have_count(0)
+    enter_admin(page)
+    page.get_by_role("button", name="账号台账", exact=True).click()
+    expect(page.locator("#content tbody tr")).to_have_count(0)
+    page.get_by_role("button", name="归档记录", exact=True).click()
+    expect(page.get_by_role("button", name="恢复账号", exact=True)).to_be_enabled()
+    expect(page.locator("#content tbody tr")).to_have_count(1)

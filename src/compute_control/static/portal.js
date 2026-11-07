@@ -67,7 +67,7 @@ window.Portal = (() => {
     const ledger = ledgerControls(account);
     if (ledger) group.prepend(ledger);
     else if (['active', 'suspended', 'archive_failed', 'needs_reconcile'].includes(account.state)) group.append(button('回收', async () => {
-      if (confirm(`回收 ${account.machine_name} 上的 ${account.username}？\n主目录：${account.home || '待核查'}\n请先结束工作。完整归档验证后会删除账号和原主目录。完成后移出账号台账，管理员可从回收站恢复。`)) { await api(`/accounts/${account.id}/retire`, 'POST', { confirmed: true }); notify('已提交回收，查看后台任务'); await load(); }
+      if (confirm(`回收 ${account.machine_name} 上的 ${account.username}？\n主目录：${account.home || '待核查'}\n请先结束工作。完整归档验证后会删除账号和原主目录。完成后移出账号台账，管理员可从归档记录恢复。`)) { await api(`/accounts/${account.id}/retire`, 'POST', { confirmed: true }); notify('已提交回收，查看后台任务'); await load(); }
     }, 'danger'));
     return group.childElementCount ? group : '—';
   }

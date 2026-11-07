@@ -18,6 +18,7 @@ from .db import Database
 from .models import (
     AccountRequest,
     Adoption,
+    ArchiveRestore,
     Assignment,
     Available,
     Confirm,
@@ -428,9 +429,15 @@ def create_app(config=None, remote=None):
 
     @app.get("/api/admin/archives")
     def archives(current=Depends(admin)):
-        return db.all(
-            "SELECT r.*,a.username,p.name,m.name AS machine_name FROM archives r JOIN accounts a ON a.id=r.account_id JOIN applicants p ON p.id=a.person_id JOIN machines m ON m.id=r.machine_id WHERE a.username<>'root' ORDER BY r.created DESC"
-        )
+        return service.archive_records()
+
+    @app.post("/api/admin/archives/{archive_id}/restore", status_code=202)
+    def restore_archive(archive_id: str, data: ArchiveRestore, current=Depends(admin)):
+        if not data.confirmed:
+            raise DomainError("需要明确确认恢复账号和归档目录")
+        password = data.password.get_secret_value() if data.password is not None else None
+        job = service.request_archive_restore(archive_id, password)
+        return {key: value for key, value in job.items() if key != "params"}
 
     @app.post("/api/admin/archives/{archive_id}/delete", status_code=202)
     def delete_archive(archive_id: str, data: Confirm, current=Depends(admin)):

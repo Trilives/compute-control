@@ -9,6 +9,7 @@
   <script src="/static/charts.js" defer></script>
   <script src="/static/guides.js" defer></script>
   <script src="/static/admin.js" defer></script>
+  <script src="/static/archive_admin.js" defer></script>
   <script src="/static/people_admin.js" defer></script>
   <script src="/static/credentials.js" defer></script>
   <script src="/static/machine_admin.js" defer></script>
@@ -74,7 +75,7 @@
     <footer><button type="button" data-close>取消</button><button class="primary" type="submit">保存</button></footer>
   </form></dialog>
   <dialog id="person-delete-dialog"><form id="person-delete-form"><h2 id="person-delete-title">删除姓名并回收账号</h2>
-    <p>请核对该人员在所有机器上的账号。确认后撤销网页访问，自动归档并校验数据，再删除账号和原 home；归档留存在回收站，可由管理员恢复。</p>
+    <p>请核对该人员在所有机器上的账号。确认后撤销网页访问，自动归档并校验数据，再删除账号和原 home；归档留存在归档记录，可由管理员恢复。</p>
     <div id="person-delete-accounts"></div><p id="person-delete-blocked" class="plain-text warning"></p>
     <p class="muted">有运行任务或远端异常时会保留记录并报告失败，请在后台任务继续核查。仅暂停网页访问时，请取消并通过“编辑”停用姓名。</p>
     <footer><button type="button" data-close>取消</button><button type="submit" class="danger">确认删除姓名并回收账号</button></footer>
@@ -98,6 +99,11 @@
     <label>已知密码（选填，仅加密记录）<input name="password" type="password" maxlength="256" autocomplete="new-password"></label>
     <p id="adopt-hint" class="muted"></p><p class="muted">未留存的旧密码无法从哈希还原，接管后可由管理员重设。</p>
     <footer><button type="button" data-close>取消</button><button type="submit" class="primary">确认接管</button></footer></form></dialog>
+  <dialog id="archive-restore-dialog"><form id="archive-restore-form"><h2>从归档恢复账号</h2>
+    <p id="archive-restore-target"></p><p id="archive-restore-hint" class="muted"></p>
+    <label id="archive-password-label" for="archive-restore-password">恢复后的登录密码</label><input id="archive-restore-password" name="password" type="password" minlength="3" maxlength="256" autocomplete="new-password">
+    <footer><button type="button" data-close>取消</button><button type="submit" class="primary">确认恢复账号和目录</button></footer>
+  </form></dialog>
   <dialog id="assignment-dialog"><form id="assignment-form"><h2 id="assignment-title">重新分配账号</h2>
     <label>新归属姓名<select name="person_id" required></select></label>
     <p class="muted">只调整平台归属及额度，保留 Linux 用户与数据；如需停止旧持有人使用原密码，请另行重设密码。</p>

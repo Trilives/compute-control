@@ -645,6 +645,7 @@ def reconcile(payload):
                 "home": proof["home"],
                 "last_password_job": proof.get("last_password_job"),
                 "last_privilege_job": proof.get("last_privilege_job"),
+                "last_restore_job": proof.get("last_restore_job"),
                 **sudo_status(proof["name"]),
             }
         raise Refuse("账号存在但未处于可用状态，请检查原任务或恢复登录")
@@ -780,15 +781,51 @@ def restore_home(path, proof, payload):
         raise Refuse("原位置被占用，恢复目录未移回")
 
 
+def selected_archive_proof(proof, payload):
+    if not payload.get("archive_path"):
+        return proof
+    selected = dict(
+        proof,
+        archive=payload["archive_path"],
+        checksum=payload["archive_checksum"],
+        size=payload["archive_size"],
+    )
+    archive = verify_archive(selected)
+    metadata_path = archive.parent / "retirement-metadata.json"
+    if metadata_path.is_symlink() or not metadata_path.is_file():
+        raise Refuse("归档恢复元数据缺失或路径异常")
+    metadata = json.loads(metadata_path.read_text())
+    if any(metadata.get(key) != proof[key] for key in ["name", "uid", "home"]):
+        raise Refuse("所选归档的账号身份不符")
+    if proof["state"] not in ["retired", "cleaned", "recreating", "restoring"]:
+        raise Refuse("当前账号状态不能从归档恢复，请先核查原任务")
+    if proof.get("archive") != str(archive):
+        home = Path(proof["home"])
+        if home.exists() or home.is_symlink():
+            raise Refuse("原目录仍存在，不能用另一个归档覆盖")
+        selected.pop("home_restore_job", None)
+    selected["restore"] = metadata.get("restore") or {}
+    selected.pop("archive_deleted", None)
+    selected.pop("archive_delete_intent", None)
+    return selected
+
+
 def restore(payload):
     path, proof = known_account(payload)
+    proof = selected_archive_proof(proof, payload)
     name, uid, home = proof["name"], proof["uid"], Path(proof["home"])
-    original = proof.get("restore")
+    original = dict(proof.get("restore") or {})
+    password = payload.get("password")
+    if password is not None and (
+        not 3 <= len(password) <= 256 or any(char in password for char in "\n\r\x00:")
+    ):
+        raise Refuse("恢复密码至少 3 字符，不能含换行、NUL 或冒号")
+    if not password and not original.get("password_hash"):
+        raise Refuse("没有留存密码，请输入恢复后的登录密码")
     if (
         uid < 1000
         or name in ["root", "admin", "nobody", payload["admin_username"]]
         or not re.fullmatch("[a-zA-Z_][a-zA-Z0-9_-]{0,63}", name)
-        or not original
     ):
         raise Refuse("账号身份受保护或缺少恢复证据")
     if home != Path("/home") / name or home.is_symlink():
@@ -863,8 +900,11 @@ def restore(payload):
     # Retain a recovery state until both password and expiry have been restored.
     proof["state"] = "restoring"
     atomic_json(path, proof)
-    run(["chpasswd", "--encrypted"], name + ":" + original["password_hash"] + "\n")
-    expire = original["expire"]
+    if password:
+        run(["chpasswd"], name + ":" + password + "\n")
+    else:
+        run(["chpasswd", "--encrypted"], name + ":" + original["password_hash"] + "\n")
+    expire = original.get("expire", "")
     expiry = (
         str(datetime.date(1970, 1, 1) + datetime.timedelta(days=int(expire)))
         if expire and int(expire) >= 0
@@ -872,9 +912,11 @@ def restore(payload):
     )
     run(["usermod", "--expiredate", expiry, "--", name])
     proof["state"] = "active"
+    proof["last_restore_job"] = payload["job_id"]
     atomic_json(path, proof)
     return {
         "state": "active",
+        "last_restore_job": proof["last_restore_job"],
         "uid": uid,
         "home": str(home),
         "last_password_job": proof.get("last_password_job"),
@@ -972,6 +1014,7 @@ def set_password(payload):
         raise Refuse("密码至少 3 字符，不能含换行、NUL 或冒号")
     run(["chpasswd"], proof["name"] + ":" + password + "\n")
     proof["last_password_job"] = payload["job_id"]
+    proof.pop("last_restore_job", None)
     atomic_json(path, proof)
     return {
         "state": "active",

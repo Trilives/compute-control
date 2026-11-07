@@ -176,6 +176,10 @@ class Worker:
             password = self.service.secrets.decrypt(json.loads(job["params"])["credential_cipher"])[
                 "password"
             ]
+        if job["kind"] == "restore" and json.loads(job["params"]).get("restore_credential_cipher"):
+            password = self.service.secrets.decrypt(
+                json.loads(job["params"])["restore_credential_cipher"]
+            )["password"]
         with self.db.connect(write=True) as conn:
             if (
                 job["kind"] == "create"
@@ -231,7 +235,11 @@ class Worker:
                     "username": account["username"],
                     "archive_root": machine["archive_root"],
                     "password": password,
-                    **json.loads(job.get("params", "{}")),
+                    **{
+                        key: value
+                        for key, value in json.loads(job.get("params", "{}")).items()
+                        if key != "restore_credential_cipher"
+                    },
                 },
             )
             if job["kind"] == "retire" and result["state"] == "retired":
@@ -283,6 +291,20 @@ class Worker:
                             conn.execute(
                                 "UPDATE jobs SET state='succeeded',step='verified',error=NULL WHERE id=?",
                                 (original["id"],),
+                            )
+                    if result.get("last_restore_job"):
+                        restored = conn.execute(
+                            "SELECT * FROM jobs WHERE id=? AND account_id=? AND kind='restore'",
+                            (result["last_restore_job"], account["id"]),
+                        ).fetchone()
+                        if restored:
+                            cipher = (
+                                json.loads(restored["params"]).get("restore_credential_cipher")
+                                or cipher
+                            )
+                            conn.execute(
+                                "UPDATE jobs SET state='succeeded',step='verified',error=NULL WHERE id=?",
+                                (restored["id"],),
                             )
                     conn.execute(
                         "UPDATE accounts SET state='active',uid=?,home=?,occupies=1,credential_cipher=COALESCE(?,credential_cipher) WHERE id=?",

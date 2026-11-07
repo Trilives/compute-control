@@ -1,7 +1,7 @@
 'use strict';
 const $ = (selector) => document.querySelector(selector);
 const state = { csrf: '', role: 'anonymous', tab: 'machines', machines: [], people: [], mode: 'applicant', showCleared: false };
-const titles = { machines: '当前状态', announcements: '公告', permissions: 'sudo 权限申请', contacts: '管理员名单', people: '申请者与额度', accounts: '账号台账', recycled: '回收站', jobs: '后台任务', archives: '归档记录', audit: '操作记录' };
+const titles = { machines: '当前状态', announcements: '公告', permissions: 'sudo 权限申请', contacts: '管理员名单', people: '申请者与额度', accounts: '账号台账', jobs: '后台任务', archives: '归档记录', audit: '操作记录' };
 const labels = { active: '可使用', suspended: '已暂停使用', restoring: '账号恢复中，额度已预留', creating: '创建中', waiting_password: '等待重新输入密码', recycle_requested: '回收排队中', archive_failed: '回收暂停，请管理员核查', needs_reconcile: '待核查远端结果', home_cleanup_pending: '账号已删除，原 home 待清理', queued: '排队中', running: '执行中', succeeded: '已完成', cancelled: '已取消', retired: '已回收', not_created: '未创建，额度已释放' };
 let loadRevision = 0;
 function applyTheme(theme) {
@@ -85,7 +85,7 @@ async function load() {
   state.machines = machines;
   if (people) state.people = people;
   if (me) { state.person = me.person; state.admin_contact = me.admin_contact; }
-  const tabs = ['machines', 'accounts', 'permissions', 'jobs', ...(state.role === 'admin' ? ['people'] : []), 'announcements', ...(state.role === 'admin' ? ['recycled', 'contacts', 'archives', 'audit'] : [])];
+  const tabs = ['machines', 'accounts', 'permissions', 'jobs', ...(state.role === 'admin' ? ['people'] : []), 'announcements', ...(state.role === 'admin' ? ['contacts', 'archives', 'audit'] : [])];
   $('#tabs').replaceChildren(...tabs.map(tab => button(titles[tab], async () => { state.tab = tab; await load(); }, tab === state.tab ? 'active' : '')));
   await render(revision);
 }
@@ -95,11 +95,6 @@ async function render(revision) {
   const actions = $('#page-actions'); actions.replaceChildren();
   actions.append(button('更新显示', load));
   if (state.tab === 'machines' && state.role === 'admin') actions.append(button('+ 添加机器', () => { openMachine(); }, 'primary'));
-  if (state.tab === 'recycled') {
-    const filter = el('label', undefined, 'check'), input = el('input'); input.type = 'checkbox'; input.checked = state.showCleared;
-    input.addEventListener('change', () => { state.showCleared = input.checked; load().catch(error => notify(error.message, true)); });
-    filter.append(input, el('span', '显示已清理账号')); actions.append(filter);
-  }
   if (state.tab === 'accounts' && state.role === 'admin') actions.append(button('接管已有账号', AdminAccounts.openAdopt));
   if (state.tab === 'accounts' || (state.tab === 'machines' && state.role === 'applicant')) actions.append(button('+ 申请账号', () => openAccount(), 'primary'));
   $('#summary').replaceChildren(metric('可见机器', state.machines.length), metric(state.role === 'admin' ? '台账可见账号' : '已用账号 / 个人上限', state.role === 'admin' ? accounts.filter(account => !['retired', 'home_cleanup_pending'].includes(account.state)).length : `${state.person.used} / ${state.person.effective_quota}`), metric('开放申请', state.machines.filter(machine => machine.available).length));
@@ -113,14 +108,13 @@ async function render(revision) {
     content.append(box, state.people.length ? table(['姓名', '状态', '已用 / 上限', '额度来源', '操作'], state.people.map(person => [person.name, person.enabled ? '启用' : '停用', `${person.used} / ${person.effective_quota}`, person.quota === null ? '默认' : '个人设置', personActions(person)])) : empty('尚无登记姓名', '添加姓名后，该人员即可立即申请机器账号。'));
   } else if (state.tab === 'accounts') {
     renderAccountGroups(accounts.filter(account => !['retired', 'home_cleanup_pending'].includes(account.state)), content);
-  } else if (state.tab === 'recycled' && state.role === 'admin') {
-    content.append(el('p', '完整归档保留时可恢复同名账号、原密码和目录；恢复会重新占用人员额度。', 'muted'));
-    renderAccountGroups(accounts.filter(account => ['retired', 'home_cleanup_pending'].includes(account.state)), content);
   } else if (state.tab === 'jobs') {
     const jobs = await api('/jobs'); if (revision !== loadRevision) return;
     content.append(jobs.length ? table(['任务编号', '类型', '阶段', '状态 / 提示', '操作'], jobs.map(job => [job.id, ({ create: '创建账号', retire: '回收账号', cleanup: '清理 home', restore: '恢复账号', suspend: '暂停账号', resume: '启用账号', reconcile: '核对结果', delete_archive: '删除归档', adopt: '接管账号', set_password: '重设密码', reboot: '重启机器', set_privilege: '变更sudo 权限' })[job.kind] || job.kind, job.step, `${labels[job.state] || job.state}${job.error ? ' · ' + job.error : ''}`, job.kind === 'reboot' && state.role === 'admin' && !['boot_verified', 'admin_checked'].includes(job.step) ? button('核查重启', async () => { if (confirm('确认已检查机器当前可用？系统会先测试连接，再解除重启维护状态。')) { await api(`/admin/machines/${job.machine_id}/reboot/check`, 'POST', { confirmed: true }); await load(); } }) : job.state === 'waiting_password' ? button('重新输入密码', () => { $('#password-form').dataset.jobId = job.id; $('#password-form').reset(); Dialogs.open('#password-dialog'); }) : '—'])) : empty('暂无后台任务', '创建与回收任务会在这里显示执行结果。'));
   } else if (state.tab === 'archives') {
-    const rows = await api('/admin/archives'); if (revision !== loadRevision) return; content.append(rows.length ? table(['姓名 / 账号', '机器', '归档路径', '大小', '校验 / 状态', '操作'], rows.map(row => [`${row.name} / ${row.username}`, row.machine_name, row.path, `${(row.size / 1048576).toFixed(1)} MiB`, row.deleted ? '已删除' : row.checksum, row.deleted ? '—' : button('删除归档', async () => { if (confirm(`永久删除 ${row.name} / ${row.username} 的归档？请先完成原 home 清理。此操作不可恢复。`)) { await api(`/admin/archives/${row.id}/delete`, 'POST', { confirmed: true }); notify('归档删除任务已提交'); await load(); } }, 'danger')])) : empty('暂无归档', '归档默认永久保留，记录不会因账号回收而消失。'));
+    const rows = await api('/admin/archives'); if (revision !== loadRevision) return;
+    content.append(rows.length ? table(['姓名 / 账号', '机器', '归档时间', '归档路径', '大小', '状态', '操作'], rows.map(row => [`${row.name} / ${row.username}`, row.machine_name, date(row.created), row.path, `${(row.size / 1048576).toFixed(1)} MiB`, row.deleted ? '归档已删除' : labels[row.account_state] || row.account_state, ArchiveAdmin.controls(row)])) : empty('暂无归档', '回收完成后在这里保留归档，可按记录恢复账号和目录。'));
+
   } else {
     const rows = await api('/admin/audit'); if (revision !== loadRevision) return; content.append(table(['时间', '身份', '动作', '对象', '结果'], rows.map(row => [date(row.ts), row.actor, row.action, row.target, row.result])));
   }
@@ -254,7 +248,7 @@ onSubmit('#password-form', async form => { await api(`/jobs/${form.dataset.jobId
 $('#development-guide').addEventListener('click', () => Guides.development(false).catch(error => notify(error.message, true)));
 $('#operation-guide').addEventListener('click', () => Guides.operation().catch(error => notify(error.message, true)));
 new ResizeObserver(() => document.documentElement.style.setProperty('--topbar-height', `${$('.topbar').getBoundingClientRect().height}px`)).observe($('.topbar'));
-AdminAccounts.initialize(); AdminPeople.initialize(); Portal.initialize(); Credentials.initialize(); MachineAdmin.initialize();
+AdminAccounts.initialize(); ArchiveAdmin.initialize(); AdminPeople.initialize(); Portal.initialize(); Credentials.initialize(); MachineAdmin.initialize();
 boot().catch(error => notify(error.message, true));
 
 function openMachineInfo(machine, title, content) {

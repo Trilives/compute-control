@@ -8,6 +8,7 @@ import uuid
 from pathlib import PurePosixPath
 
 from .account_admin import AccountAdministration
+from .archive_recovery import ArchiveRecovery
 from .db import encode
 from .management_passwords import ManagementPasswords, machine_credentials, uses_separate_sudo
 from .people_retirement import PeopleRetirement
@@ -37,7 +38,9 @@ def capability_reasons(capabilities):
     return reasons or ["能力报告未通过，请重新检测"]
 
 
-class Service(AccountAdministration, PortalOperations, ManagementPasswords, PeopleRetirement):
+class Service(
+    AccountAdministration, PortalOperations, ManagementPasswords, PeopleRetirement, ArchiveRecovery
+):
     def __init__(self, db, secrets, remote, config):
         self.db, self.secrets, self.remote, self.config = db, secrets, remote, config
 
@@ -510,6 +513,8 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords, Peop
                 (account_id,),
             ).fetchone():
                 raise DomainError("已有待执行操作", 409)
+            if kind == "restore":
+                params = self.prepare_archive_restore(conn, account, params)
             if kind in ["restore", "resume"]:
                 owner = conn.execute(
                     "SELECT * FROM applicants WHERE id=? AND enabled=1 AND deleted_at IS NULL",

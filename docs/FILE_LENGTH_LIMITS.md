@@ -21,7 +21,7 @@
 | `docs/records/2026-11-04-illustrated-tutorials.md` | 80 | 21 | 无 | 分角色图文教程、内部凭据隔离、范围修改及制作中发现的 HTTP 表单兼容修复 |
 | `docs/records/2026-11-04-production-deployment.md` | 100 | 42 | 无 | 本次中断恢复、实际部署、数据迁移、备份及验收边界 |
 | `docs/records/2026-11-04-vpn-access.md` | 80 | 16 | 无 | 授权 VPN 访问入口、证书扩展、实际验证边界及回滚 |
-| `docs/FILE_LENGTH_LIMITS.md` | 140 | 90 | 无 | 当前全部文本逐文件登记及清理规则，新增部署记录和回归测试条目 |
+| `docs/FILE_LENGTH_LIMITS.md` | 160 | 90 | 无 | 当前全部文本逐文件登记及清理规则，新增部署记录和回归测试条目 |
 | `docs/MAINTENANCE.md` | 100 | 36 | 无 | 维护周期、触发条件与改进方向，不复制任务状态 |
 | `docs/TODO.md` | 160 | 54 | 无 | 开头保留简短约束，下方只留未完成任务，完成结果转存记录 |
 | `docs/USER_GUIDE.md` | 100 | 95 | 无 | 面向申请者的短操作指南和常见问题 |
@@ -38,7 +38,7 @@
 | `src/compute_control/config.py` | 110 | 59 | 无 | 启动配置加载与校验，说明留在配置文档 |
 | `src/compute_control/db.py` | 180 | 163 | 无 | 首版表结构、连接、事务和基础审计持久化 |
 | `src/compute_control/models.py` | 130 | 114 | 无 | 公共请求的类型和校验规则 |
-| `src/compute_control/remote.py` | 1250 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
+| `src/compute_control/remote.py` | 1300 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
 | `src/compute_control/security.py` | 190 | 138 | 无 | 密码、会话及凭据加密，不混入 HTTP 页面 |
 | `src/compute_control/services.py` | 600 | 498 | 无 | 既有机器、额度、台账业务及重启维护检查；管理操作拆到同职责文件 |
 | `src/compute_control/ssh.py` | 190 | 142 | 无 | 固定指纹及分离 sudo/操作输入协议 |
@@ -125,6 +125,11 @@
 | `tests/test_account_suspension.py` | 180 | 114 | 无 | 暂停启用、保留额度、活动进程和角色浏览器回归 |
 | `tests/test_person_retirement.py` | 200 | 121 | 无 | 删除姓名的全量核对、并发变化、任务取消和浏览器确认 |
 | `docs/records/2026-11-07-account-lifecycle.md` | 120 | 17 | 无 | 机器代分配、暂停回收、归档恢复和姓名删除的验证与部署交接 |
+
+| `src/compute_control/archive_recovery.py` | 110 | 64 | 无 | 逐条归档恢复、旧密码兼容及任务参数脱敏 |
+| `src/compute_control/static/archive_admin.js` | 90 | 33 | 无 | 归档记录恢复按钮、密码输入和关闭清理 |
+| `tests/test_archive_recovery_controls.py` | 300 | 215 | 无 | 逐条归档、旧密码、断线核对和浏览器恢复回归 |
+| `docs/records/2026-11-07-archive-recovery.md` | 100 | 16 | 无 | 归档入口合并、密码兼容与长任务核查的验证部署交接 |
 
 ## 清理时如何使用
 
