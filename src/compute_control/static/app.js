@@ -217,7 +217,7 @@ function applicationBlocker(machine) {
 }
 function openAccount(machineId) {
   if (state.role === 'applicant' && state.person.used >= state.person.effective_quota) throw new Error('已达到账号上限，请联系管理员');
-  const available = state.machines.filter(machine => machine.available && (state.role === 'admin' || !applicationBlocker(machine)));
+  const available = state.machines.filter(machine => state.role === 'admin' ? !machine.creation_blockers?.length : !applicationBlocker(machine));
   if (!available.length) throw new Error('当前没有开放申请的机器，请联系管理员');
   if (machineId && !available.some(machine => machine.id === machineId)) throw new Error('该机器当前不可申请，请刷新后重试');
   const form = $('#account-form'); form.reset();

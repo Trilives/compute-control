@@ -23,6 +23,7 @@ window.MachineAdmin = (() => {
       [button(machine.available ? '关闭申请' : '开放申请', async () => {
         await api(`/admin/machines/${machine.id}`, 'PATCH', { available: !machine.available }); await load();
       }), '调整新账号申请的开放状态，已有账号和任务继续保留。'],
+      [button('为人员分配账号', () => openAccount(machine.id)), '为指定人员创建新账号；关闭申请的机器也可分配，仍遵守人员额度。'],
       [button('机器账号与 sudo 权限', () => openMachineUsers(machine)), '查看机器账号；为已登记的普通账号管理 sudo 权限。'],
     ]);
     group('连接与密码', [

@@ -177,7 +177,10 @@ class Worker:
                 "password"
             ]
         with self.db.connect(write=True) as conn:
-            if job["kind"] == "create" and not machine["available"] and job["step"] == "queued":
+            if (
+                job["kind"] == "create" and not machine["available"] and job["step"] == "queued"
+                and not json.loads(job["params"]).get("admin_allocation", False)
+            ):
                 conn.execute(
                     "UPDATE jobs SET state='cancelled',updated=? WHERE id=?",
                     (time.time(), job["id"]),

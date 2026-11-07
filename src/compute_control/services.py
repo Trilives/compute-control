@@ -354,13 +354,15 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
                     raise DomainError("申请标识冲突", 409)
                 return dict(previous)
             person = conn.execute(
-                "SELECT * FROM applicants WHERE id=? AND enabled=1", (owner,)
+                "SELECT * FROM applicants WHERE id=? AND enabled=1 AND deleted_at IS NULL", (owner,)
             ).fetchone()
             machine = conn.execute(
-                "SELECT * FROM machines WHERE id=? AND available=1", (machine_id,)
+                "SELECT * FROM machines WHERE id=?", (machine_id,)
             ).fetchone()
-            if not person or not machine:
+            if not person or not machine or (not machine["available"] and session["role"] != "admin"):
                 raise DomainError("名单无效或机器未开放申请", 403)
+            if not json.loads(machine["capabilities"]).get("can_create"):
+                raise DomainError("机器不具备创建账号能力", 409)
             self.guard_reboot(conn, machine_id)
             snapshot = json.loads(machine["snapshot"]) if machine["snapshot"] else {}
             if (
@@ -400,8 +402,9 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
             except sqlite3.IntegrityError as exc:
                 raise DomainError("该机器上用户名已有登记账号", 409) from exc
             conn.execute(
-                "INSERT INTO jobs(id,account_id,machine_id,kind,state,created,updated,request_key) VALUES (?,?,?,?,?,?,?,?)",
-                (job_id, account_id, machine_id, "create", "queued", now, now, request_key),
+                "INSERT INTO jobs(id,account_id,machine_id,kind,state,created,updated,request_key,params) VALUES (?,?,?,?,?,?,?,?,?)",
+                (job_id, account_id, machine_id, "create", "queued", now, now, request_key,
+                 encode({"admin_allocation": session["role"] == "admin"})),
             )
             self.db.audit(conn, actor(session), "account.request", account_id)
         return self.db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
