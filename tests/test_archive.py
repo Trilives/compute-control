@@ -48,6 +48,8 @@ def sandbox(tmp_path, monkeypatch):
 
     def run(args, input=None, check=True):
         commands.append(args)
+        if args[0] in ["useradd", "groupadd"]:
+            raise AssertionError("Account creation must be simulated by the test")
         if args[0] == "sshd":
             return "usepam yes\n"
         if args[0] == "userdel":
