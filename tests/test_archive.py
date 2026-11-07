@@ -63,7 +63,19 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.setattr(remote, "receipt_path", lambda _: receipt)
     monkeypatch.setattr(remote, "safe_directory", directory)
     monkeypatch.setattr(remote, "user_exists", lambda _: present["account"])
-    monkeypatch.setattr(remote, "local_user", lambda _: ["researcher"])
+    monkeypatch.setattr(
+        remote,
+        "local_user",
+        lambda _: [
+            "researcher",
+            "x",
+            str(os.getuid()),
+            str(os.getgid()),
+            "",
+            str(home),
+            "/bin/bash",
+        ],
+    )
     monkeypatch.setattr(remote.pwd, "getpwall", lambda: [])
     monkeypatch.setattr(remote, "active_processes", lambda *_: [])
     monkeypatch.setattr(remote, "run", run)
