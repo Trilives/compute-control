@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 class Refuse(Exception):
@@ -529,7 +529,13 @@ def retire(payload):
             for line in Path("/etc/shadow").read_text().splitlines()
             if line.split(":", 1)[0] == name
         )
-        proof["restore"] = {"password_hash": shadow[1], "expire": shadow[7]}
+        fields = local_user(name)
+        proof["restore"] = {
+            "password_hash": shadow[1],
+            "expire": shadow[7],
+            "gid": getattr(account, "pw_gid", home.stat().st_gid),
+            "shell": fields[6] if len(fields) > 6 else "/bin/bash",
+        }
         # Persist intent before disabling; an interrupted operation is never auto-unlocked.
         proof["state"] = "quiescing"
         atomic_json(path, proof)
@@ -538,6 +544,10 @@ def retire(payload):
     atomic_json(path, proof)
     if active_processes(uid, str(home)):
         raise Refuse("停用后仍有进程，暂停回收")
+    if payload.get("suspend_only"):
+        proof["state"] = "suspended"
+        atomic_json(path, proof)
+        return {"state": "suspended", "uid": uid, "home": str(home)}
     archive_root = safe_directory(payload["archive_root"], True)
     if (
         archive_root == home
@@ -628,9 +638,9 @@ def reconcile(payload):
     if proof["state"] == "creating" and not account and not Path(proof["home"]).exists():
         return {"state": "not_created"}
     if account and account.pw_uid == proof["uid"] and account.pw_dir == proof["home"]:
-        if proof["state"] == "active":
+        if proof["state"] in ["active", "suspended"]:
             return {
-                "state": "active",
+                "state": proof["state"],
                 "uid": proof["uid"],
                 "home": proof["home"],
                 "last_password_job": proof.get("last_password_job"),
@@ -686,35 +696,205 @@ def cleanup(payload):
     return {"state": "home_cleaned"}
 
 
+def restored_manifest(home):
+    # Inodes change on extraction; internal hardlink counts and all other metadata must match.
+    return {
+        name: {key: value for key, value in entry.items() if key != "inode"}
+        for name, entry in manifest(home).items()
+    }
+
+
+def restore_home(path, proof, payload):
+    home = Path(proof["home"])
+    archive = verify_archive(proof)
+    saved = json.loads((archive.parent / "manifest.json").read_text())
+    expected = {
+        name: {key: value for key, value in entry.items() if key != "inode"}
+        for name, entry in saved.items()
+    }
+    if home.exists() or home.is_symlink():
+        if (
+            not proof.get("home_restore_job")
+            or home.is_symlink()
+            or restored_manifest(home) != expected
+        ):
+            raise Refuse("目标主目录已存在，禁止覆盖")
+        return
+    with tarfile.open(archive) as contents:
+        names = set()
+        for member in contents:
+            raw = PurePosixPath(member.name)
+            name = str(raw)
+            if raw.is_absolute() or ".." in raw.parts or name in names or name not in saved:
+                raise Refuse("归档存在不安全或重复路径")
+            names.add(name)
+            if not (member.isdir() or member.isfile() or member.issym() or member.islnk()):
+                raise Refuse("归档包含特殊对象")
+            for parent in raw.parents:
+                if str(parent) not in saved or not stat.S_ISDIR(saved[str(parent)]["mode"]):
+                    raise Refuse("归档路径经过非目录条目")
+            if member.islnk():
+                link = PurePosixPath(member.linkname)
+                if (
+                    link.is_absolute()
+                    or ".." in link.parts
+                    or str(link) not in saved
+                    or not stat.S_ISREG(saved[str(link)]["mode"])
+                ):
+                    raise Refuse("归档硬链接目标异常")
+        if names != set(saved):
+            raise Refuse("归档条目不完整")
+    required = sum(item.get("size", 0) for item in saved.values())
+    if shutil.disk_usage(home.parent).free < required + max(required // 10, 64 * 1024 * 1024):
+        raise Refuse("恢复目录空间不足")
+    if not re.fullmatch("[0-9a-f]{32}", payload["job_id"]):
+        raise Refuse("恢复任务标识非法")
+    directory = safe_directory(home.parent / ".compute-control-restore", True)
+    stage = directory / (payload["account_id"] + "-" + payload["job_id"])
+    if stage.exists() or stage.is_symlink():
+        raise Refuse("存在未完成的恢复目录，请先核查原任务")
+    stage.mkdir(mode=0o700)
+    proof["home_restore_job"] = payload["job_id"]
+    atomic_json(path, proof)
+    run(
+        [
+            "tar",
+            "--extract",
+            "--acls",
+            "--xattrs",
+            "--sparse",
+            "--numeric-owner",
+            "--same-owner",
+            "--preserve-permissions",
+            "-f",
+            str(archive),
+            "-C",
+            str(stage),
+        ]
+    )
+    if restored_manifest(stage) != expected:
+        raise Refuse("恢复目录内容或元数据校验失败，保留临时目录供核查")
+    # GNU mv uses no-replace semantics; never merge into or overwrite an existing home.
+    run(["mv", "--no-clobber", "--no-target-directory", "--", str(stage), str(home)])
+    if stage.exists() or not home.is_dir() or home.is_symlink():
+        raise Refuse("原位置被占用，恢复目录未移回")
+
+
 def restore(payload):
     path, proof = known_account(payload)
-    account = user_exists(proof["name"])
+    name, uid, home = proof["name"], proof["uid"], Path(proof["home"])
+    original = proof.get("restore")
+    if (
+        uid < 1000
+        or name in ["root", "admin", "nobody", payload["admin_username"]]
+        or not re.fullmatch("[a-zA-Z_][a-zA-Z0-9_-]{0,63}", name)
+        or not original
+    ):
+        raise Refuse("账号身份受保护或缺少恢复证据")
+    if home != Path("/home") / name or home.is_symlink():
+        raise Refuse("主目录路径异常，不能恢复")
+    safe_directory(home.parent)
+    if any(
+        item.pw_name != name and (item.pw_uid == uid or item.pw_dir == str(home))
+        for item in pwd.getpwall()
+    ):
+        raise Refuse("UID 或主目录已被其他账号使用，不能恢复")
+    account = user_exists(name)
+    if proof["state"] in ["retired", "cleaned"] and account:
+        raise Refuse("同名账号已存在，禁止覆盖")
+    if proof["state"] == "cleaned" or (proof["state"] == "retired" and not home.exists()):
+        restore_home(path, proof, payload)
+        proof["state"] = "retired"
+        atomic_json(path, proof)
+    if not home.is_dir() or home.stat().st_uid != uid:
+        raise Refuse("原主目录不存在或所有权已变化，不能恢复")
+    if proof["state"] in ["retired", "recreating"] and not (
+        proof["state"] == "recreating" and account
+    ):
+        if account:
+            raise Refuse("同名账号已存在，禁止覆盖")
+        gid = original.get("gid", home.stat().st_gid)
+        try:
+            grp.getgrgid(gid)
+        except KeyError:
+            try:
+                grp.getgrnam(name)
+            except KeyError:
+                pass
+            else:
+                raise Refuse("同名用户组已被占用，不能恢复")
+            # The saved primary group was removed with the user; recreate only that group.
+            run(["groupadd", "--gid", str(gid), "--", name])
+        proof["state"] = "recreating"
+        # A recreated account has a fresh sudo policy; old completed grants remain historical.
+        proof.pop("last_privilege_job", None)
+        atomic_json(path, proof)
+        run(
+            [
+                "useradd",
+                "--no-create-home",
+                "--no-user-group",
+                "--uid",
+                str(uid),
+                "--gid",
+                str(gid),
+                "--home-dir",
+                str(home),
+                "--shell",
+                original.get("shell", "/bin/bash"),
+                "--expiredate",
+                "1",
+                "--",
+                name,
+            ]
+        )
+        account = user_exists(name)
     if (
         not account
-        or account.pw_uid != proof["uid"]
-        or proof["state"] not in ["quiescing", "quiesced", "verified"]
+        or account.pw_uid != uid
+        or account.pw_dir != str(home)
+        or proof["state"]
+        not in ["quiescing", "quiesced", "verified", "recreating", "restoring", "suspended"]
     ):
         raise Refuse("当前状态不能恢复登录，需管理员核查")
-    original = proof["restore"]
-    # Hash is supplied on stdin, never in argv or operation results.
-    run(["chpasswd", "--encrypted"], proof["name"] + ":" + original["password_hash"] + "\n")
+    local = local_user(name)
+    if not local or len(local) < 7 or int(local[2]) != uid or local[5] != str(home):
+        raise Refuse("本地账号身份与恢复证据不符")
+    # Retain a recovery state until both password and expiry have been restored.
+    proof["state"] = "restoring"
+    atomic_json(path, proof)
+    run(["chpasswd", "--encrypted"], name + ":" + original["password_hash"] + "\n")
     expire = original["expire"]
     expiry = (
         str(datetime.date(1970, 1, 1) + datetime.timedelta(days=int(expire)))
         if expire and int(expire) >= 0
         else ""
     )
-    run(["usermod", "--expiredate", expiry, "--", proof["name"]])
+    run(["usermod", "--expiredate", expiry, "--", name])
     proof["state"] = "active"
     atomic_json(path, proof)
     return {
         "state": "active",
-        "uid": proof["uid"],
-        "home": proof["home"],
+        "uid": uid,
+        "home": str(home),
         "last_password_job": proof.get("last_password_job"),
         "last_privilege_job": proof.get("last_privilege_job"),
-        **sudo_status(proof["name"]),
+        **sudo_status(name),
     }
+
+
+def suspend(payload):
+    _, proof = known_account(payload)
+    if proof["state"] not in ["active", "quiescing", "quiesced", "suspended"]:
+        raise Refuse("当前状态不能暂停账号")
+    return retire(dict(payload, suspend_only=True))
+
+
+def resume(payload):
+    _, proof = known_account(payload)
+    if proof["state"] not in ["suspended", "quiescing", "quiesced", "restoring"]:
+        raise Refuse("当前状态不能重新启用账号，请先核对远端结果")
+    return restore(payload)
 
 
 def delete_archive(payload):
@@ -984,6 +1164,8 @@ def main():
             "reconcile": reconcile,
             "cleanup": cleanup,
             "restore": restore,
+            "suspend": suspend,
+            "resume": resume,
             "delete_archive": delete_archive,
             "adopt": adopt,
             "set_password": set_password,

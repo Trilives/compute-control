@@ -43,7 +43,7 @@ def test_navigation_buttons_and_responsive_dialogs(app, live_page, role):
         tabs += ["申请者与额度"]
     tabs += ["公告"]
     if role == "admin":
-        tabs += ["管理员名单", "归档记录", "操作记录"]
+        tabs += ["回收站", "管理员名单", "归档记录", "操作记录"]
     expect(page.locator("#tabs button")).to_have_text(tabs)
     for title in tabs:
         page.locator("#tabs").get_by_role("button", name=title, exact=True).click()

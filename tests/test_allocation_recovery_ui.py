@@ -38,9 +38,10 @@ def test_recovery_button_restores_record_and_is_admin_only(app, live_page):
     owner, account_id, runner = recycled(app)
     page = live_page
     enter_admin(page)
-    page.locator("#tabs").get_by_role("button", name="账号台账", exact=True).click()
+    page.locator("#tabs").get_by_role("button", name="回收站", exact=True).click()
     page.once("dialog", lambda dialog: dialog.accept())
     page.get_by_role("button", name="恢复账号", exact=True).click()
+    page.locator("#tabs").get_by_role("button", name="账号台账", exact=True).click()
     expect(page.locator("#content")).to_contain_text("账号恢复中")
     runner.process_job(app.state.db.one("SELECT * FROM jobs WHERE kind='restore'"))
     page.get_by_role("button", name="更新显示", exact=True).click()

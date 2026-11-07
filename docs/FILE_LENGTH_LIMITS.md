@@ -38,9 +38,9 @@
 | `src/compute_control/config.py` | 110 | 59 | 无 | 启动配置加载与校验，说明留在配置文档 |
 | `src/compute_control/db.py` | 180 | 163 | 无 | 首版表结构、连接、事务和基础审计持久化 |
 | `src/compute_control/models.py` | 130 | 114 | 无 | 公共请求的类型和校验规则 |
-| `src/compute_control/remote.py` | 1100 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
+| `src/compute_control/remote.py` | 1250 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
 | `src/compute_control/security.py` | 190 | 138 | 无 | 密码、会话及凭据加密，不混入 HTTP 页面 |
-| `src/compute_control/services.py` | 550 | 498 | 无 | 既有机器、额度、台账业务及重启维护检查；管理操作拆到同职责文件 |
+| `src/compute_control/services.py` | 600 | 498 | 无 | 既有机器、额度、台账业务及重启维护检查；管理操作拆到同职责文件 |
 | `src/compute_control/ssh.py` | 190 | 142 | 无 | 固定指纹及分离 sudo/操作输入协议 |
 | `src/compute_control/static/app.css` | 180 | 126 | 无 | 当前页面布局与响应式样式 |
 | `src/compute_control/static/app.js` | 280 | 258 | 无 | 单控制台交互与 API 调用，无 Linux 命令或业务授权规则 |
@@ -116,6 +116,15 @@
 | `docs/records/2026-11-04-v0.2.2-markdown-guides.md` | 100 | 25 | 无 | 内嵌 Markdown 通用图文、演示图片、安全渲染与私密 PDF 分离 |
 | `docs/records/2026-11-05-applicant-ledger-columns.md` | 50 | 9 | 无 | 申请者移除重复姓名列及管理员归属展示回归与部署记录 |
 | `docs/records/2026-11-05-explicit-sudo-password-mode.md` | 70 | 16 | 无 | 默认同步、显式独立 sudo 凭据、旧记录兼容及测试部署交接 |
+
+| `src/compute_control/people_retirement.py` | 180 | 135 | 无 | 姓名删除计划、并发复核、会话撤销和账号回收事务 |
+| `src/compute_control/static/people_admin.js` | 80 | 25 | 无 | 删除姓名前核对全部账号的弹窗和确认提交 |
+| `tests/test_closed_allocation.py` | 120 | 42 | 无 | 关闭申请时管理员代分配及能力、额度约束 |
+| `tests/test_account_recovery.py` | 320 | 313 | 无 | 恢复额度、真实归档解包、目录元数据和身份冲突保护 |
+| `tests/test_allocation_recovery_ui.py` | 140 | 67 | 无 | 关闭申请后的代分配与回收站恢复浏览器流程 |
+| `tests/test_account_suspension.py` | 180 | 114 | 无 | 暂停启用、保留额度、活动进程和角色浏览器回归 |
+| `tests/test_person_retirement.py` | 200 | 121 | 无 | 删除姓名的全量核对、并发变化、任务取消和浏览器确认 |
+| `docs/records/2026-11-07-account-lifecycle.md` | 120 | 17 | 无 | 机器代分配、暂停回收、归档恢复和姓名删除的验证与部署交接 |
 
 ## 清理时如何使用
 

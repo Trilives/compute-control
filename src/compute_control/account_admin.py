@@ -153,6 +153,8 @@ class AccountAdministration:
             raise DomainError("机器密码不能包含冒号或换行")
         if not account["occupies"]:
             raise DomainError("账号已回收，不能重设密码", 409)
+        if account["state"] != "active":
+            raise DomainError("请先恢复或启用账号后再重设密码", 409)
         job_id, now = uuid.uuid4().hex, time.time()
         cipher = self.secrets.encrypt({"password": password})
         with self.db.connect(write=True) as conn:

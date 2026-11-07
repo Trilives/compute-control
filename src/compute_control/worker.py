@@ -178,7 +178,9 @@ class Worker:
             ]
         with self.db.connect(write=True) as conn:
             if (
-                job["kind"] == "create" and not machine["available"] and job["step"] == "queued"
+                job["kind"] == "create"
+                and not machine["available"]
+                and job["step"] == "queued"
                 and not json.loads(job["params"]).get("admin_allocation", False)
             ):
                 conn.execute(
@@ -232,6 +234,15 @@ class Worker:
                     **json.loads(job.get("params", "{}")),
                 },
             )
+            if job["kind"] == "retire" and result["state"] == "retired":
+                cleaned = self.service.remote.execute(
+                    machine,
+                    "cleanup",
+                    {"account_id": account["id"], "username": account["username"]},
+                )
+                if cleaned["state"] != "home_cleaned":
+                    raise DomainError("账号已删除但原目录清理未确认，请核查原任务")
+                result = dict(result, state="cleaned")
             with self.db.connect(write=True) as conn:
                 if result["state"] == "active":
                     cipher = (
@@ -276,6 +287,11 @@ class Worker:
                     conn.execute(
                         "UPDATE accounts SET state='active',uid=?,home=?,occupies=1,credential_cipher=COALESCE(?,credential_cipher) WHERE id=?",
                         (result["uid"], result["home"], cipher, account["id"]),
+                    )
+                elif result["state"] == "suspended":
+                    conn.execute(
+                        "UPDATE accounts SET state='suspended',occupies=1 WHERE id=?",
+                        (account["id"],),
                     )
                 elif result["state"] in ["retired", "cleaned"]:
                     conn.execute(
@@ -334,6 +350,8 @@ class Worker:
                     "adopt",
                     "set_password",
                     "set_privilege",
+                    "suspend",
+                    "resume",
                 ]:
                     state = account["state"]
                 conn.execute("UPDATE accounts SET state=? WHERE id=?", (state, account["id"]))

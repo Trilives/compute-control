@@ -83,6 +83,10 @@ class Confirm(Input):
     confirmed: bool
 
 
+class PersonDeletion(Confirm):
+    review_token: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class RebootRequest(Confirm):
     force: bool = False
     force_confirmed: bool = False

@@ -17,7 +17,6 @@ def retired_account(app):
     runner.process_job(created)
     account_id = created["account_id"]
     runner.process_job(app.state.service.retire_account({"role": "admin"}, account_id))
-    runner.process_job(app.state.service.admin_job("cleanup", account_id))
     return owner, account_id
 
 
@@ -163,7 +162,7 @@ def test_ledger_cleanup_and_restore_browser_flow(app, live_page):
     page.locator("#login-name").fill("admin")
     page.locator("#login-password").fill(ADMIN_PASSWORD)
     page.locator("#login-form button[type=submit]").click()
-    page.get_by_role("button", name="账号台账", exact=True).click()
+    page.get_by_role("button", name="回收站", exact=True).click()
     expect(page.get_by_role("button", name="清理台账", exact=True)).to_be_visible()
     page.once("dialog", lambda dialog: dialog.dismiss())
     page.get_by_role("button", name="清理台账", exact=True).click()

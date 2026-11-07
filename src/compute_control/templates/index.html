@@ -9,6 +9,7 @@
   <script src="/static/charts.js" defer></script>
   <script src="/static/guides.js" defer></script>
   <script src="/static/admin.js" defer></script>
+  <script src="/static/people_admin.js" defer></script>
   <script src="/static/credentials.js" defer></script>
   <script src="/static/machine_admin.js" defer></script>
   <script src="/static/portal.js" defer></script>
@@ -71,6 +72,12 @@
     <label class="check"><input name="enabled" type="checkbox" checked>允许进入与申请</label>
     <p class="muted">登记即代表审核通过。停用姓名或降低额度不会自动删除机器账号。</p>
     <footer><button type="button" data-close>取消</button><button class="primary" type="submit">保存</button></footer>
+  </form></dialog>
+  <dialog id="person-delete-dialog"><form id="person-delete-form"><h2 id="person-delete-title">删除姓名并回收账号</h2>
+    <p>请核对该人员在所有机器上的账号。确认后撤销网页访问，自动归档并校验数据，再删除账号和原 home；归档留存在回收站，可由管理员恢复。</p>
+    <div id="person-delete-accounts"></div><p id="person-delete-blocked" class="plain-text warning"></p>
+    <p class="muted">有运行任务或远端异常时会保留记录并报告失败，请在后台任务继续核查。仅暂停网页访问时，请取消并通过“编辑”停用姓名。</p>
+    <footer><button type="button" data-close>取消</button><button type="submit" class="danger">确认删除姓名并回收账号</button></footer>
   </form></dialog>
   <dialog id="account-dialog"><form id="account-form"><h2>申请机器账号</h2>
     <label id="owner-wrap">所属申请者<select name="person_id"></select></label>

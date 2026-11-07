@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from .account_admin import AccountAdministration
 from .db import encode
 from .management_passwords import ManagementPasswords, machine_credentials, uses_separate_sudo
+from .people_retirement import PeopleRetirement
 from .portal import PortalOperations
 from .security import DomainError, validate_password
 
@@ -36,7 +37,7 @@ def capability_reasons(capabilities):
     return reasons or ["能力报告未通过，请重新检测"]
 
 
-class Service(AccountAdministration, PortalOperations, ManagementPasswords):
+class Service(AccountAdministration, PortalOperations, ManagementPasswords, PeopleRetirement):
     def __init__(self, db, secrets, remote, config):
         self.db, self.secrets, self.remote, self.config = db, secrets, remote, config
 
@@ -82,20 +83,6 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
         except sqlite3.IntegrityError as exc:
             raise DomainError("姓名已存在，请区分同名人员", 409) from exc
         return self.person(person_id)
-
-    def delete_person(self, person_id):
-        with self.db.connect(write=True) as conn:
-            person = conn.execute("SELECT * FROM applicants WHERE id=?", (person_id,)).fetchone()
-            if not person:
-                raise DomainError("人员不存在", 404)
-            conn.execute(
-                "UPDATE applicants SET enabled=0,deleted_at=COALESCE(deleted_at,?) WHERE id=?",
-                (time.time(), person_id),
-            )
-            conn.execute("DELETE FROM sessions WHERE person_id=?", (person_id,))
-            if person["deleted_at"] is None:
-                self.db.audit(conn, "admin", "applicant.delete", person_id)
-        return {"deleted": True}
 
     def visible_machines(self, session):
         sql = "SELECT * FROM machines"
@@ -356,10 +343,12 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
             person = conn.execute(
                 "SELECT * FROM applicants WHERE id=? AND enabled=1 AND deleted_at IS NULL", (owner,)
             ).fetchone()
-            machine = conn.execute(
-                "SELECT * FROM machines WHERE id=?", (machine_id,)
-            ).fetchone()
-            if not person or not machine or (not machine["available"] and session["role"] != "admin"):
+            machine = conn.execute("SELECT * FROM machines WHERE id=?", (machine_id,)).fetchone()
+            if (
+                not person
+                or not machine
+                or (not machine["available"] and session["role"] != "admin")
+            ):
                 raise DomainError("名单无效或机器未开放申请", 403)
             if not json.loads(machine["capabilities"]).get("can_create"):
                 raise DomainError("机器不具备创建账号能力", 409)
@@ -403,8 +392,17 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
                 raise DomainError("该机器上用户名已有登记账号", 409) from exc
             conn.execute(
                 "INSERT INTO jobs(id,account_id,machine_id,kind,state,created,updated,request_key,params) VALUES (?,?,?,?,?,?,?,?,?)",
-                (job_id, account_id, machine_id, "create", "queued", now, now, request_key,
-                 encode({"admin_allocation": session["role"] == "admin"})),
+                (
+                    job_id,
+                    account_id,
+                    machine_id,
+                    "create",
+                    "queued",
+                    now,
+                    now,
+                    request_key,
+                    encode({"admin_allocation": session["role"] == "admin"}),
+                ),
             )
             self.db.audit(conn, actor(session), "account.request", account_id)
         return self.db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
@@ -422,7 +420,7 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
         with self.db.connect(write=True) as conn:
             account = conn.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
             self.guard_reboot(conn, account["machine_id"])
-            if account["state"] not in ["active", "archive_failed", "needs_reconcile"]:
+            if account["state"] not in ["active", "suspended", "archive_failed", "needs_reconcile"]:
                 raise DomainError("账号当前状态不能提交回收", 409)
             if conn.execute(
                 "SELECT id FROM jobs WHERE account_id=? AND state IN ('queued','running')",
@@ -489,20 +487,52 @@ class Service(AccountAdministration, PortalOperations, ManagementPasswords):
         account = self.authorize_account({"role": "admin"}, account_id)
         allowed = {
             "cleanup": ["home_cleanup_pending"],
-            "restore": ["archive_failed", "needs_reconcile"],
-            "reconcile": ["needs_reconcile", "archive_failed"],
+            "suspend": ["active"],
+            "resume": ["suspended"],
+            "restore": [
+                "archive_failed",
+                "needs_reconcile",
+                "home_cleanup_pending",
+                "restoring",
+                "retired",
+            ],
+            "reconcile": ["needs_reconcile", "archive_failed", "suspended", "restoring"],
             "delete_archive": ["retired"],
         }
-        if kind not in allowed or account["state"] not in allowed[kind]:
-            raise DomainError("账号当前状态不允许此操作", 409)
         now, job_id = time.time(), new_id()
         with self.db.connect(write=True) as conn:
+            account = conn.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
+            if kind not in allowed or account["state"] not in allowed[kind]:
+                raise DomainError("账号当前状态不允许此操作", 409)
             self.guard_reboot(conn, account["machine_id"])
             if conn.execute(
-                "SELECT id FROM jobs WHERE account_id=? AND state IN ('queued','running')",
+                "SELECT id FROM jobs WHERE account_id=? AND state IN ('queued','running','waiting_password')",
                 (account_id,),
             ).fetchone():
                 raise DomainError("已有待执行操作", 409)
+            if kind in ["restore", "resume"]:
+                owner = conn.execute(
+                    "SELECT * FROM applicants WHERE id=? AND enabled=1 AND deleted_at IS NULL",
+                    (account["person_id"],),
+                ).fetchone()
+                if not owner:
+                    raise DomainError("请先重新启用账号所属人员", 409)
+                if not account["occupies"]:
+                    quota = owner["quota"]
+                    if quota is None:
+                        quota = conn.execute(
+                            "SELECT value FROM settings WHERE key='default_quota'"
+                        ).fetchone()[0]
+                    used = conn.execute(
+                        "SELECT COUNT(*) FROM accounts WHERE person_id=? AND occupies=1",
+                        (owner["id"],),
+                    ).fetchone()[0]
+                    if used >= quota:
+                        raise DomainError("恢复账号需要可用额度，请先调整人员额度", 409)
+                if kind == "restore":
+                    conn.execute(
+                        "UPDATE accounts SET occupies=1,state='restoring' WHERE id=?", (account_id,)
+                    )
             conn.execute(
                 "INSERT INTO jobs(id,account_id,machine_id,kind,state,created,updated,request_key,params) VALUES (?,?,?,?,?,?,?,?,?)",
                 (

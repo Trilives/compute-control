@@ -74,3 +74,41 @@ def test_admin_suspend_resume_keeps_quota_and_member_cannot_control_it(app, clie
         app.state.db.one("SELECT state FROM accounts WHERE id=?", (account_id,))["state"]
         == "active"
     )
+
+
+def test_browser_exposes_pause_and_resume_as_distinct_controls(app, live_page):
+    from playwright.sync_api import expect
+    from test_machine_management_ui import enter_admin
+
+    owner, target = person(app), machine(app)
+    runner = worker(app)
+    runner.process_job(apply(app, owner, target))
+    original = app.state.service.remote.execute
+
+    def execute(machine, action, data=None):
+        if action == "suspend":
+            return {"state": "suspended", "uid": 1001, "home": "/home/researcher"}
+        if action == "resume":
+            return {"state": "active", "uid": 1001, "home": "/home/researcher"}
+        return original(machine, action, data)
+
+    app.state.service.remote.execute = execute
+    page = live_page
+    enter_admin(page)
+    page.locator("#tabs").get_by_role("button", name="账号台账", exact=True).click()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.get_by_role("button", name="暂停使用", exact=True).click()
+    expect(page.locator("#notice")).to_contain_text("已提交后台任务")
+    runner.process_job(app.state.db.one("SELECT * FROM jobs WHERE kind='suspend'"))
+    page.get_by_role("button", name="更新显示", exact=True).click()
+    expect(page.get_by_role("button", name="启用账号", exact=True)).to_be_visible()
+    expect(page.get_by_role("button", name="回收", exact=True)).to_be_visible()
+    page.once("dialog", lambda dialog: dialog.accept())
+    with page.expect_response(
+        lambda response: response.url.endswith("/resume") and response.request.method == "POST"
+    ) as submitted:
+        page.get_by_role("button", name="启用账号", exact=True).click()
+    assert submitted.value.status == 202
+    runner.process_job(app.state.db.one("SELECT * FROM jobs WHERE kind='resume'"))
+    page.get_by_role("button", name="更新显示", exact=True).click()
+    expect(page.get_by_role("button", name="暂停使用", exact=True)).to_be_visible()

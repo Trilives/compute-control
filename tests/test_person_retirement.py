@@ -58,3 +58,64 @@ def test_person_deletion_cancels_unstarted_creation_without_remote_changes(app, 
     runner.process_job(app.state.db.one("SELECT * FROM jobs WHERE id=?", (job["id"],)))
     assert all(action != "create" for _, action in app.state.service.remote.calls)
     assert app.state.db.one("SELECT state FROM accounts")["state"] == "cancelled"
+
+
+def test_deletion_dialog_lists_all_accounts_and_cancel_is_safe(app, live_page):
+    from playwright.sync_api import expect
+    from test_machine_management_ui import enter_admin
+
+    owner = person(app)
+    runner = worker(app)
+    for i in range(2):
+        runner.process_job(
+            apply(app, owner, machine(app, f"192.0.2.{i + 1}"), username=f"user_{i}")
+        )
+    page = live_page
+    enter_admin(page)
+    page.locator("#tabs").get_by_role("button", name="申请者与额度", exact=True).click()
+    page.get_by_role("button", name="删除姓名", exact=True).click()
+    dialog = page.locator("#person-delete-dialog")
+    expect(dialog.locator("tbody tr")).to_have_count(2)
+    expect(dialog).to_contain_text("user_0")
+    expect(dialog).to_contain_text("user_1")
+    dialog.get_by_role("button", name="取消", exact=True).click()
+    assert app.state.service.person(owner["id"])["enabled"]
+    assert not app.state.db.all("SELECT id FROM jobs WHERE kind='retire'")
+    page.get_by_role("button", name="删除姓名", exact=True).click()
+    dialog.get_by_role("button", name="确认删除姓名并回收账号", exact=True).click()
+    expect(dialog).not_to_be_visible()
+    expect(page.locator("#page-title")).to_have_text("后台任务")
+    assert len(app.state.db.all("SELECT id FROM jobs WHERE kind='retire'")) == 2
+
+
+def test_running_mutation_blocks_removal_and_keeps_person_enabled(app, client):
+    owner, target = person(app), machine(app)
+    job = apply(app, owner, target)
+    with app.state.db.connect(write=True) as conn:
+        conn.execute("UPDATE jobs SET state='running',step='remote' WHERE id=?", (job["id"],))
+    plan = review(client, owner)
+    assert plan["blocked"]
+    assert remove(client, owner, plan).status_code == 409
+    assert app.state.service.person(owner["id"])["enabled"]
+
+
+def test_machine_maintenance_blocks_destructive_person_removal(app, client):
+    owner, target = person(app), machine(app)
+    worker(app).process_job(apply(app, owner, target))
+    with app.state.db.connect(write=True) as conn:
+        conn.execute(
+            "INSERT INTO machine_password_changes VALUES (?,?,?,'pending',0,0)",
+            (target["id"], "a" * 32, "test-encrypted-candidate"),
+        )
+    plan = review(client, owner)
+    assert plan["blocked"]
+    assert remove(client, owner, plan).status_code == 409
+    assert app.state.service.person(owner["id"])["enabled"]
+
+
+def test_repeated_person_removal_does_not_duplicate_queued_retirement(app, client):
+    owner, target = person(app), machine(app)
+    worker(app).process_job(apply(app, owner, target))
+    assert remove(client, owner, review(client, owner)).json()["retirement_jobs"] == 1
+    assert remove(client, owner, review(client, owner)).json()["retirement_jobs"] == 0
+    assert len(app.state.db.all("SELECT id FROM jobs WHERE kind='retire'")) == 1

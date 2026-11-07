@@ -113,7 +113,7 @@ class SSH:
             output = output.split(b"CC_READY\n", 1)[1]
             deadline = time.monotonic() + (
                 7500
-                if action in ["retire", "cleanup", "delete_archive"]
+                if action in ["retire", "cleanup", "delete_archive", "restore"]
                 else self.config.ssh_timeout * 4
             )
             while True:

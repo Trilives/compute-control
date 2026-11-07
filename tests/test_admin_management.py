@@ -3,6 +3,7 @@ import time
 
 from conftest import apply, login, machine, person
 from fastapi.testclient import TestClient
+from test_person_retirement import remove, review
 from test_worker import TEST_MACHINE_CREDENTIAL, MemoryMailbox
 
 from compute_control.db import SCHEMA, Database
@@ -21,7 +22,7 @@ def test_delete_name_revokes_session_but_preserves_accounts(app, client):
     owner, target, account_id = active_account(app)
     with TestClient(app) as user:
         login(user, "applicant", owner["name"], "")
-        assert client.delete("/api/admin/applicants/" + owner["id"]).status_code == 200
+        assert remove(client, owner, review(client, owner)).status_code == 200
         assert client.get("/api/admin/applicants").json() == []
         assert user.get("/api/accounts").status_code == 401
         assert client.get("/api/accounts").json()[0]["id"] == account_id
@@ -54,7 +55,7 @@ def test_password_encrypted_hidden_until_owner_inactive(app, client):
         ).status_code
         == 403
     )
-    client.delete("/api/admin/applicants/" + owner["id"])
+    remove(client, owner, review(client, owner))
     result = client.post(
         "/api/admin/accounts/" + account_id + "/password/reveal", json={"confirmed": True}
     )
@@ -101,7 +102,7 @@ def test_explicit_legacy_adoption_does_not_create_user(app, client):
     account = client.get("/api/accounts").json()[0]
     assert account["source"] == "imported" and account["state"] == "active"
     assert app.state.service.remote.calls[-1][1] == "adopt"
-    client.delete("/api/admin/applicants/" + owner["id"])
+    remove(client, owner, review(client, owner))
     result = client.post(
         "/api/admin/accounts/" + account["id"] + "/password/reveal", json={"confirmed": True}
     )
@@ -131,7 +132,7 @@ def test_password_reset_job_never_returns_cipher_and_updates_after_success(app, 
     job = app.state.db.one("SELECT * FROM jobs WHERE id=?", (response.json()["id"],))
     runner = Worker(app.state.db, app.state.service, app.state.config, MemoryMailbox("123"))
     runner.process_job(job)
-    client.delete("/api/admin/applicants/" + owner["id"])
+    remove(client, owner, review(client, owner))
     result = client.post(
         "/api/admin/accounts/" + account_id + "/password/reveal", json={"confirmed": True}
     )

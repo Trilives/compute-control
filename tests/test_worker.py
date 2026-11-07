@@ -107,14 +107,14 @@ def test_archive_failure_preserves_account_and_quota(app):
     assert app.state.db.all("SELECT * FROM archives") == []
 
 
-def test_archive_success_releases_quota_but_preserves_home_cleanup_record(app):
+def test_archive_success_cleans_home_releases_quota_and_preserves_record(app):
     owner, target = person(app), machine(app)
     created = apply(app, owner, target)
     worker(app).process_job(created)
     job = app.state.service.retire_account({"role": "admin"}, created["account_id"])
     worker(app).process_job(job)
     account = app.state.db.one("SELECT * FROM accounts WHERE id=?", (created["account_id"],))
-    assert account["state"] == "home_cleanup_pending" and account["occupies"] == 0
+    assert account["state"] == "retired" and account["occupies"] == 0
     assert len(app.state.db.all("SELECT * FROM archives")) == 1
 
 
@@ -166,17 +166,6 @@ def test_admin_cleanup_and_archive_deletion_leave_audit_and_tombstone(app, clien
     runner.process_job(created)
     runner.process_job(app.state.service.retire_account({"role": "admin"}, created["account_id"]))
     archive = app.state.db.one("SELECT * FROM archives")
-    assert (
-        client.post(
-            "/api/admin/archives/" + archive["id"] + "/delete", json={"confirmed": True}
-        ).status_code
-        == 409
-    )
-    response = client.post(
-        "/api/accounts/" + created["account_id"] + "/cleanup", json={"confirmed": True}
-    )
-    assert response.status_code == 202
-    runner.process_job(response.json())
     response = client.post(
         "/api/admin/archives/" + archive["id"] + "/delete", json={"confirmed": True}
     )
@@ -247,6 +236,9 @@ def test_retire_automatically_cleans_home_after_verified_archive(app):
     created = apply(app, owner, target)
     runner.process_job(created)
     runner.process_job(app.state.service.retire_account({"role": "admin"}, created["account_id"]))
-    assert app.state.service.remote.calls[-2:] == [(target["id"], "retire"), (target["id"], "cleanup")]
+    assert app.state.service.remote.calls[-2:] == [
+        (target["id"], "retire"),
+        (target["id"], "cleanup"),
+    ]
     assert app.state.db.one("SELECT state FROM accounts")["state"] == "retired"
     assert app.state.service.person(owner["id"])["used"] == 0

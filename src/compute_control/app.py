@@ -26,6 +26,7 @@ from .models import (
     Machine,
     Password,
     Person,
+    PersonDeletion,
     Quota,
     RebootRequest,
     Target,
@@ -186,9 +187,15 @@ def create_app(config=None, remote=None):
             raise DomainError("人员不存在", 404)
         return service.save_person(data.model_dump(), person_id)
 
+    @app.get("/api/admin/applicants/{person_id}/deletion")
+    def person_removal(person_id: str, current=Depends(admin)):
+        return service.person_removal_plan(person_id)
+
     @app.delete("/api/admin/applicants/{person_id}")
-    def delete_person(person_id: str, current=Depends(admin)):
-        return service.delete_person(person_id)
+    def delete_person(person_id: str, data: PersonDeletion | None = None, current=Depends(admin)):
+        if data is not None and not data.confirmed:
+            raise DomainError("需要明确确认人员账号归档回收")
+        return service.delete_person(person_id, data.review_token if data else None)
 
     @app.get("/api/admin/settings")
     def settings(current=Depends(admin)):
@@ -376,7 +383,13 @@ def create_app(config=None, remote=None):
     def account_admin_action(
         account_id: str, operation: str, data: Confirm, current=Depends(admin)
     ):
-        if not data.confirmed or operation not in ["cleanup", "restore", "reconcile"]:
+        if not data.confirmed or operation not in [
+            "cleanup",
+            "restore",
+            "reconcile",
+            "suspend",
+            "resume",
+        ]:
             raise DomainError("操作无效或未明确确认")
         return service.admin_job(operation, account_id)
 

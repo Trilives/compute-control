@@ -40,9 +40,14 @@ window.AdminAccounts = (() => {
       $('#reveal-title').textContent = `${account.machine_name} / ${account.username} 的留存密码`;
       Dialogs.open('#reveal-dialog');
     }));
-    const operations = account.state === 'home_cleanup_pending' ? [['cleanup', '校验并清理原 home']] : ['archive_failed', 'needs_reconcile'].includes(account.state) ? [['reconcile', '核对远端结果'], ['restore', '恢复原登录状态']] : [];
+    if (['active', 'suspended'].includes(account.state)) group.append(button(account.state === 'active' ? '暂停使用' : '启用账号', async () => {
+      const suspend = account.state === 'active';
+      if (!confirm(`${suspend ? '暂停使用' : '启用账号'}：${account.machine_name} / ${account.username}？${suspend ? '保留账号、密码和目录，仍占额度；有运行中的任务时会拒绝暂停。' : '恢复暂停前的登录状态。'}`)) return;
+      await api(`/accounts/${account.id}/${suspend ? 'suspend' : 'resume'}`, 'POST', { confirmed: true }); notify('已提交后台任务'); await load();
+    }));
+    const operations = ['home_cleanup_pending', 'retired'].includes(account.state) ? [['restore', '恢复账号'], ...(account.state === 'home_cleanup_pending' ? [['cleanup', '校验并清理原 home']] : [])] : ['archive_failed', 'needs_reconcile', 'restoring'].includes(account.state) ? [['reconcile', '核对远端结果'], ['restore', '恢复账号']] : [];
     for (const [operation, text] of operations) group.append(button(text, async () => {
-      if (confirm(`${text}：${account.machine_name} 上的 ${account.username}？${operation === 'cleanup' ? '将永久删除已归档且内容未变化的原 home。' : ''}`)) { await api(`/accounts/${account.id}/${operation}`, 'POST', { confirmed: true }); notify('已提交后台任务'); await load(); }
+      if (confirm(`${text}：${account.machine_name} 上的 ${account.username}？${operation === 'cleanup' ? '将永久删除已归档且内容未变化的原 home，之后恢复需要从完整归档还原目录。' : operation === 'restore' ? '恢复会占用人员额度；若账号已删除，将重新创建同名账号并恢复目录（原目录已清理时从归档校验还原），保留回收前密码。sudo 权限需恢复后核查。' : ''}`)) { await api(`/accounts/${account.id}/${operation}`, 'POST', { confirmed: true }); notify('已提交后台任务'); await load(); }
     }, operation === 'cleanup' ? 'danger' : ''));
     return group;
   }
