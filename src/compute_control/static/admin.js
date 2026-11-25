@@ -31,6 +31,18 @@ window.AdminAccounts = (() => {
     $('#admin-password-title').textContent = `管理 ${account.machine_name} / ${account.username} 的密码`;
     Dialogs.open('#admin-password-dialog');
   }
+  function reconcileControl(account, reviewRetirement = account?.state === 'archive_failed') {
+    if (!account || !['archive_failed', 'needs_reconcile', 'restoring'].includes(account.state)) return null;
+    if (account.has_pending_job) return el('span', '已有待执行任务', 'muted');
+    if (reviewRetirement) return RetirementAdmin.reviewLink();
+    return button('检查账号状态', async () => {
+      if (!confirm(`核对 ${account.machine_name} 上的 ${account.username} 的远端状态？`)) return;
+      await api(`/accounts/${account.id}/reconcile`, 'POST', { confirmed: true });
+      state.tab = 'jobs';
+      await load();
+      notify('已提交核对任务，执行结果请查看后台任务。');
+    });
+  }
   function controls(account) {
     const group = el('div', undefined, 'actions');
     if (account.occupies) group.append(button('重新分配', () => openAssignment(account)), button('管理密码', () => openPassword(account)));
@@ -45,7 +57,9 @@ window.AdminAccounts = (() => {
       if (!confirm(`${suspend ? '暂停使用' : '启用账号'}：${account.machine_name} / ${account.username}？${suspend ? '保留账号、密码和目录，仍占额度；有运行中的任务时会拒绝暂停。' : '恢复暂停前的登录状态。'}`)) return;
       await api(`/accounts/${account.id}/${suspend ? 'suspend' : 'resume'}`, 'POST', { confirmed: true }); notify('已提交后台任务'); await load();
     }));
-    const operations = ['home_cleanup_pending', 'retired'].includes(account.state) ? (account.state === 'home_cleanup_pending' ? [['cleanup', '校验并清理原 home']] : []) : ['archive_failed', 'needs_reconcile', 'restoring'].includes(account.state) ? [['reconcile', '核对远端结果'], ['restore', '恢复账号']] : [];
+    const reconcile = reconcileControl(account);
+    if (reconcile) group.append(reconcile);
+    const operations = account.state === 'home_cleanup_pending' ? [['cleanup', '校验并清理原 home']] : reconcile ? [['restore', '恢复账号']] : [];
     for (const [operation, text] of operations) group.append(button(text, async () => {
       if (confirm(`${text}：${account.machine_name} 上的 ${account.username}？${operation === 'cleanup' ? '将永久删除已归档且内容未变化的原 home，之后恢复需要从完整归档还原目录。' : operation === 'restore' ? '恢复会占用人员额度；若账号已删除，将重新创建同名账号并恢复目录（原目录已清理时从归档校验还原），保留回收前密码。sudo 权限需恢复后核查。' : ''}`)) { await api(`/accounts/${account.id}/${operation}`, 'POST', { confirmed: true }); notify('已提交后台任务'); await load(); }
     }, operation === 'cleanup' ? 'danger' : ''));
@@ -84,5 +98,5 @@ window.AdminAccounts = (() => {
     await api(`/admin/machines/${machine.id}/reboot`, 'POST', { confirmed: true, force, force_confirmed: force });
     notify('重启指令已提交，平台任务不会自动重复执行。'); state.tab = 'jobs'; await load();
   }
-  return { openAdopt, controls, initialize, reboot };
+  return { openAdopt, controls, initialize, reconcileControl, reboot };
 })();

@@ -38,18 +38,25 @@ def test_navigation_buttons_and_responsive_dialogs(app, live_page, role):
         page.locator("#login-name").fill("张三")
     page.locator("#login-form button[type=submit]").click()
     expect(page.locator(".machine-grid > article")).to_have_count(3)
-    tabs = ["当前状态", "账号台账", "sudo 权限申请", "后台任务"]
+    tabs = ["当前状态", "账号台账", "审阅" if role == "admin" else "sudo 权限申请", "后台任务"]
     if role == "admin":
         tabs += ["申请者与额度"]
     tabs += ["公告"]
     if role == "admin":
-        tabs += ["管理员名单", "归档记录", "操作记录"]
+        tabs += ["管理员名单", "归档记录"]
     expect(page.locator("#tabs button")).to_have_text(tabs)
     for title in tabs:
         page.locator("#tabs").get_by_role("button", name=title, exact=True).click()
         expect(page.locator("#page-title")).to_have_text(title)
         page.locator("#page-actions").get_by_role("button", name="更新显示").click()
         expect(page.locator("#page-title")).to_have_text(title)
+        expect(page.locator('#tabs [aria-current="page"]')).to_have_text(title)
+        if title == "当前状态":
+            expect(page.locator("#summary")).to_be_visible()
+        else:
+            expect(page.locator("#summary")).to_be_hidden()
+        if title == "后台任务" and role == "admin":
+            expect(page.get_by_role("heading", name="操作记录", exact=True)).to_be_visible()
         if title == "申请者与额度":
             expect(page.get_by_role("textbox", name="补充联系说明")).to_have_count(0)
         if title == "管理员名单":
@@ -106,7 +113,18 @@ def test_add_person_stays_visible_while_scrolling_long_directory(app, live_page)
     add = page.get_by_role("button", name="+ 添加姓名", exact=True)
     for width in [1440, 390]:
         page.set_viewport_size({"width": width, "height": 900})
+        page.wait_for_function("""() => parseFloat(document.documentElement.style.getPropertyValue('--topbar-height')) ===
+            document.querySelector('.topbar').getBoundingClientRect().height""")
+        nav = page.locator("#tabs")
+        start = nav.bounding_box()
+        assert start["y"] - page.locator(".topbar").bounding_box()["height"] == (
+            74 if width == 1440 else 14
+        )
+        content = page.locator("#content").bounding_box()
+        assert start["x"] >= content["x"] + content["width"]
         page.locator("#content tbody tr").last.scroll_into_view_if_needed()
+        assert page.evaluate("scrollY > 0")
+        assert nav.bounding_box() == start
         expect(add).to_be_in_viewport()
         bounds = add.bounding_box()
         header = page.locator(".topbar").bounding_box()

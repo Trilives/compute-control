@@ -51,6 +51,10 @@ def register_portal(app, service, member, admin):
     def requests(current=Depends(member)):
         return service.permission_requests(current)
 
+    @app.get("/api/admin/unmanaged-accounts")
+    def unmanaged_accounts(current=Depends(admin)):
+        return service.unmanaged_accounts()
+
     @app.post("/api/permission-requests", status_code=201)
     def request(data: PermissionRequest, current=Depends(member)):
         return service.request_permission(current, data.account_id, data.reason)

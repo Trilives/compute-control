@@ -6,8 +6,38 @@ import time
 
 import httpx
 import uvicorn
-from conftest import ADMIN_PASSWORD
+from conftest import ADMIN_PASSWORD, person
 from playwright.sync_api import expect, sync_playwright
+
+
+def test_login_remember_me_controls_cookie_persistence(app, live_page):
+    owner = person(app)
+    page = live_page
+    form = page.locator("#login-form")
+    remember_me = form.get_by_role("checkbox", name="保持登录", exact=True)
+    submit = form.get_by_role("button", name="进入", exact=True)
+    expect(form.locator("#login-label")).to_have_text("登记姓名")
+    expect(remember_me).to_be_checked()
+
+    page.get_by_role("button", name="管理员入口", exact=True).click()
+    expect(remember_me).to_be_checked()
+    form.get_by_label("管理员用户名", exact=True).fill("admin")
+    form.get_by_label("管理员密码", exact=True).fill(ADMIN_PASSWORD)
+    submit.click()
+    expect(page.locator("#role-label")).to_have_text("ADMIN WORKSPACE")
+    cookie = next(cookie for cookie in page.context.cookies() if cookie["name"] == "cc_session")
+    assert cookie["expires"] > time.time()
+
+    page.get_by_role("button", name="退出", exact=True).click()
+    expect(remember_me).to_be_checked()
+    form.get_by_label("登记姓名", exact=True).fill(owner["name"])
+    remember_me.uncheck()
+    submit.click()
+    expect(page.locator("#role-label")).to_have_text("APPLICANT WORKSPACE")
+    cookie = next(cookie for cookie in page.context.cookies() if cookie["name"] == "cc_session")
+    assert cookie["expires"] == -1
+    page.reload()
+    expect(page.locator("#identity")).to_contain_text(owner["name"])
 
 
 def test_admin_and_applicant_browser_flow(app):

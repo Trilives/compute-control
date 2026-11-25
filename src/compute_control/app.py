@@ -1,6 +1,7 @@
 """HTTP composition and authorization; business operations live in services."""
 
 import ipaddress
+import json
 import secrets as random
 import sqlite3
 import time
@@ -30,6 +31,7 @@ from .models import (
     PersonDeletion,
     Quota,
     RebootRequest,
+    Retirement,
     Target,
 )
 from .portal_api import register_portal
@@ -107,11 +109,11 @@ def create_app(config=None, remote=None):
             raise DomainError("需要管理员权限", 403)
         return value
 
-    def attach_cookie(response, token):
+    def attach_cookie(response, token, *, remember_me=True):
         response.set_cookie(
             cookie_name,
             token,
-            max_age=config.session_seconds,
+            max_age=config.session_seconds if remember_me else None,
             httponly=True,
             secure=config.secure_cookie,
             samesite="strict",
@@ -167,7 +169,8 @@ def create_app(config=None, remote=None):
         token, value = auth.issue(data.role, person_id, request.cookies.get(cookie_name))
         with db.connect(write=True) as conn:
             db.audit(conn, actor(value), "session.login", data.role)
-        return attach_cookie(JSONResponse({"role": data.role, "csrf": value["csrf"]}), token)
+        response = JSONResponse({"role": data.role, "csrf": value["csrf"]})
+        return attach_cookie(response, token, remember_me=data.remember_me)
 
     @app.post("/api/auth/logout")
     def logout(request: Request, current=Depends(session)):
@@ -375,10 +378,25 @@ def create_app(config=None, remote=None):
         return job
 
     @app.post("/api/accounts/{account_id}/retire", status_code=202)
-    def retire(account_id: str, data: Confirm, current=Depends(member)):
+    def retire(account_id: str, data: Retirement, current=Depends(member)):
         if not data.confirmed:
             raise DomainError("须明确确认回收")
-        return service.retire_account(current, account_id)
+        review = data.process_review.model_dump() if data.process_review else None
+        return service.retire_account(
+            current,
+            account_id,
+            process_review=review,
+            review_job_id=data.review_job_id,
+            archive_special_objects=data.archive_special_objects,
+        )
+
+    @app.get("/api/admin/accounts/{account_id}/retirement-activity")
+    def retirement_activity(account_id: str, current=Depends(admin)):
+        return service.retirement_activity(account_id)
+
+    @app.get("/api/admin/retirement-reviews")
+    def retirement_reviews(current=Depends(admin)):
+        return service.retirement_reviews()
 
     @app.post("/api/accounts/{account_id}/{operation}", status_code=202)
     def account_admin_action(
@@ -397,12 +415,14 @@ def create_app(config=None, remote=None):
     @app.get("/api/jobs")
     def jobs(current=Depends(member)):
         if current["role"] == "admin":
-            return [
-                {key: value for key, value in job.items() if key != "params"}
-                for job in db.all("SELECT * FROM jobs ORDER BY created DESC LIMIT 200")
-            ]
+            rows = db.all("SELECT * FROM jobs ORDER BY created DESC LIMIT 200")
+            for job in rows:
+                job.pop("params")
+                if job["result"] is not None:
+                    job["result"] = json.loads(job["result"])
+            return rows
         return [
-            {key: value for key, value in job.items() if key != "params"}
+            {key: value for key, value in job.items() if key not in ["params", "result"]}
             for job in db.all(
                 "SELECT j.* FROM jobs j JOIN accounts a ON a.id=j.account_id WHERE a.person_id=? ORDER BY j.created DESC LIMIT 200",
                 (current["person_id"],),

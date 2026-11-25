@@ -2,10 +2,10 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, select, textarea { font: inherit; }
-button { cursor: pointer; border: 1px solid var(--line); border-radius: 8px; padding: 9px 15px; background: var(--surface); color: var(--text); transition: border-color .15s; }
+button { cursor: pointer; border: 1px solid var(--line); border-radius: 8px; padding: 9px 15px; background: var(--surface); color: var(--text); font-weight: 400; transition: border-color .15s; }
 button:hover { border-color: #7b94ad; }
 button:disabled { opacity: .5; cursor: wait; }
-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 650; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 button.danger { color: #c54747; }
 a { color: var(--accent); text-decoration: none; }
 .topbar { position: sticky; top: 0; z-index: 3; background: var(--surface); min-height: 76px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; padding: 15px 5vw; gap: 12px; }
@@ -32,9 +32,30 @@ input[readonly] { color: var(--muted); font-size: 12px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .section-head h1 { font-size: 32px; }
 #page-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-nav { display: flex; gap: 8px; border-bottom: 1px solid var(--line); margin-top: 30px; padding-bottom: 12px; overflow-x: auto; }
-nav button { border-color: transparent; background: transparent; white-space: nowrap; color: var(--muted); }
-nav button.active { color: var(--accent); background: #8ef0c310; }
+#console { --nav-width: 146px; --nav-gap: 24px; --nav-top-gap: 74px; padding-right: calc(var(--nav-width) + var(--nav-gap)); }
+#tabs {
+  position: fixed; top: calc(var(--topbar-height, 76px) + var(--nav-top-gap)); right: max(5vw, calc((100% - 1320px) / 2)); z-index: 2;
+  display: flex; flex-direction: column; gap: 4px; width: var(--nav-width);
+  max-height: calc(100dvh - var(--topbar-height, 76px) - var(--nav-top-gap) - 12px);
+  overflow-y: auto; overscroll-behavior: contain; padding: 6px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+}
+#tabs button { flex: 0 0 auto; min-width: 0; min-height: 36px; padding: 7px 11px; text-align: left; overflow-wrap: anywhere; border-color: transparent; background: transparent; color: var(--muted); }
+#tabs button:hover { background: var(--surface-alt); }
+#tabs button.active { color: var(--accent); background: var(--surface-alt); box-shadow: inset 3px 0 var(--accent); }
+#tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#content { margin-top: 20px; }
+@media (min-width: 901px) {
+  #console { --nav-width: 176px; --nav-gap: 28px; }
+  #tabs { padding: 8px; gap: 6px; box-shadow: 0 8px 24px #07152326; }
+  #tabs button { min-height: 42px; padding-inline: 14px; color: var(--text); }
+  #tabs button.active { color: var(--accent-text); background: var(--accent); box-shadow: none; }
+}
+@media (max-width: 650px) {
+  #console { --nav-width: clamp(72px, 22vw, 112px); --nav-gap: 10px; --nav-top-gap: 14px; }
+  #tabs { padding: 4px; border-radius: 8px; }
+  #tabs button { min-height: 40px; padding: 6px; font-size: 12px; line-height: 1.4; }
+}
 .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 25px 0; }
 .metric { padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .metric strong { font-size: 29px; font-weight: 500; display: block; margin-top: 12px; }
@@ -92,6 +113,11 @@ footer { margin-top: 28px; display: flex; justify-content: flex-end; gap: 10px; 
 .account-machine-group { margin-bottom: 18px; padding: 18px; }
 .account-machine-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .account-machine-heading h2 { margin: 0; font-size: 20px; } .account-machine-heading p { margin: 4px 0 0; }
+.inventory-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inventory-controls select, .inventory-controls input { width: auto; max-width: 100%; margin: 0; }
+.inventory-warnings { margin: 6px 0 10px; padding-inline-start: 20px; }
+.inventory-table { max-height: min(50vh, 460px); margin-top: 8px; }
+.inventory-table th { position: sticky; top: 0; }
 .permission-switch { gap: 9px; flex-wrap: wrap; }
 .permission-switch input[role=switch] { appearance: none; width: 42px; height: 24px; min-width: 42px; padding: 0; border: 0; border-radius: 99px; background: #81909b; position: relative; cursor: pointer; transition: background .18s; }
 .permission-switch input[role=switch]::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px #0003; transition: transform .18s; }

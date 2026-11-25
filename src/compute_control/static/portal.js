@@ -66,8 +66,8 @@ window.Portal = (() => {
     const group = state.role === 'admin' ? AdminAccounts.controls(account) : el('div', undefined, 'actions'); group.classList.add('row-actions');
     const ledger = ledgerControls(account);
     if (ledger) group.prepend(ledger);
-    else if (['active', 'suspended', 'archive_failed', 'needs_reconcile'].includes(account.state)) group.append(button('回收', async () => {
-      if (confirm(`回收 ${account.machine_name} 上的 ${account.username}？\n主目录：${account.home || '待核查'}\n请先结束工作。完整归档验证后会删除账号和原主目录。完成后移出账号台账，管理员可从归档记录恢复。`)) { await api(`/accounts/${account.id}/retire`, 'POST', { confirmed: true }); notify('已提交回收，查看后台任务'); await load(); }
+    else if (['active', 'suspended', 'needs_reconcile'].includes(account.state)) group.append(button('回收', async () => {
+      if (confirm(`回收 ${account.machine_name} 上的 ${account.username}？\n主目录：${account.home || '待核查'}\n完整归档验证后会删除账号和原主目录。如有活动进程或其他阻塞，将暂停并提交管理员审阅。`)) { await api(`/accounts/${account.id}/retire`, 'POST', { confirmed: true }); notify('已提交回收，查看后台任务'); await load(); }
     }, 'danger'));
     return group.childElementCount ? group : '—';
   }
@@ -99,8 +99,15 @@ window.Portal = (() => {
       text.value = settings.admin_contact || ''; text.rows = 3; text.maxLength = 2000; text.setAttribute('aria-label', '补充联系说明');
       contact.append(el('h2', '补充联系说明'), text, button('保存联系方式', async () => { await api('/admin/settings/contact', 'PUT', { text: text.value }); notify('联系方式已保存'); })); content.append(contact);
     } else {
-      if (state.role === 'applicant') actions.append(button('申请 sudo 权限', openPermission, 'primary'));
-      const items = await api('/permission-requests'); if (revision !== loadRevision) return;
+      const isAdmin = state.role === 'admin';
+      if (!isAdmin) actions.append(button('申请 sudo 权限', openPermission, 'primary'));
+      const [items, retirements, inventory] = await Promise.all([
+        api('/permission-requests'),
+        isAdmin ? api('/admin/retirement-reviews') : null,
+        isAdmin ? api('/admin/unmanaged-accounts') : null,
+      ]);
+      if (revision !== loadRevision) return;
+      if (isAdmin) content.append(RetirementAdmin.reviewList(retirements, revision), AccountInventory.render(inventory), el('h2', 'sudo 权限申请'));
       content.append(items.length ? table(['姓名 / 账号', '机器', '申请事由', '处理结果', '操作'], items.map(item => [`${item.name} / ${item.username}`, item.machine_name, el('p', item.reason, 'plain-text'), `${requestLabels[item.state]}${item.response ? ' · ' + item.response : ''}${item.job_id ? ' · 任务 ' + item.job_id : ''}`, state.role === 'admin' && item.state === 'pending' ? button('处理申请', () => { const form = $('#permission-decision-form'); form.reset(); form.dataset.requestId = item.id; $('#permission-reason').textContent = item.reason; Dialogs.open('#permission-decision-dialog'); }) : '—'])) : empty('暂无sudo 权限申请', '说明事由后，由管理员决定协助安装、授予 sudo 权限或拒绝申请。'));
     }
   }

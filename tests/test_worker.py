@@ -118,6 +118,33 @@ def test_archive_success_cleans_home_releases_quota_and_preserves_record(app):
     assert len(app.state.db.all("SELECT * FROM archives")) == 1
 
 
+def test_reconciliation_keeps_a_safe_snapshot_for_the_admin(app, client, monkeypatch):
+    owner, target = person(app), machine(app)
+    created = apply(app, owner, target)
+    runner = worker(app)
+    runner.process_job(created)
+    account_id = created["account_id"]
+    with app.state.db.connect(write=True) as conn:
+        conn.execute("UPDATE accounts SET state='archive_failed' WHERE id=?", (account_id,))
+    job = app.state.service.admin_job("reconcile", account_id)
+    result = {"state": "active", "uid": 1001, "home": "/home/researcher", "is_admin": False}
+    monkeypatch.setattr(
+        app.state.service.remote, "execute", lambda *_: result | {"last_password_job": "private-id"}
+    )
+    runner.process_job(job)
+    with app.state.db.connect(write=True) as conn:
+        conn.execute("UPDATE accounts SET state='suspended' WHERE id=?", (account_id,))
+
+    shown = next(row for row in client.get("/api/jobs").json() if row["id"] == job["id"])
+    assert shown["state"] == "succeeded"
+    assert shown["result"] == result
+    assert "params" not in shown
+    with TestClient(app) as user:
+        login(user, "applicant", owner["name"], "")
+        own = next(row for row in user.get("/api/jobs").json() if row["id"] == job["id"])
+        assert "result" not in own
+
+
 def test_restart_never_blindly_repeats_remote_operation(app):
     owner, target = person(app), machine(app)
     job = apply(app, owner, target)

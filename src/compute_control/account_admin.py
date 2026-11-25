@@ -193,6 +193,16 @@ class AccountAdministration:
         ).fetchone():
             raise DomainError("机器重启结果尚未核实，暂不执行账号操作", 409)
 
+    def retirement_reviews(self):
+        return self.db.all(
+            "SELECT a.id,a.username,a.home,m.name AS machine_name,j.id AS job_id,j.error "
+            "FROM accounts a JOIN machines m ON m.id=a.machine_id "
+            "JOIN jobs j ON j.id=(SELECT id FROM jobs WHERE account_id=a.id AND kind<>'reconcile' "
+            "ORDER BY created DESC,id DESC LIMIT 1) "
+            "WHERE a.state IN ('archive_failed','needs_reconcile') "
+            "AND j.kind='retire' AND j.state='needs_reconcile' ORDER BY j.updated DESC"
+        )
+
     def reboot_precheck(self, machine_id):
         machine = self.db.one("SELECT * FROM machines WHERE id=?", (machine_id,))
         if not machine:

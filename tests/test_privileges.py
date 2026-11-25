@@ -2,7 +2,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from conftest import apply, machine, person
+from conftest import apply, login, machine, person
 from test_worker import MemoryMailbox
 
 from compute_control import remote
@@ -109,6 +109,56 @@ def test_sudo_status_distinguishes_denial_from_failed_probe(
     monkeypatch.setattr(remote.subprocess, "run", probe)
     assert remote.sudo_status("researcher")["is_admin"] is expected
     assert calls == [["sudo", "-n", "-l", "-U", "researcher"]]
+
+
+@pytest.mark.parametrize(
+    "receipt_state, expected",
+    [(None, 0), (None, 1), (None, None), ("setting_password", 0), ("active", 1)],
+)
+def test_creation_reports_actual_sudo_access_before_sampling(
+    app, client, tmp_path, monkeypatch, receipt_state, expected
+):
+    owner, target = person(app), machine(app)
+    login(client, "applicant", owner["name"], "")
+    task = apply(app, owner, target)
+    path = tmp_path / "proof.json"
+    user = SimpleNamespace(pw_uid=1000, pw_dir="/home/researcher")
+    if receipt_state:
+        path.write_text(
+            json.dumps(
+                {
+                    "name": "researcher",
+                    "uid": user.pw_uid,
+                    "home": user.pw_dir,
+                    "state": receipt_state,
+                }
+            )
+        )
+    monkeypatch.setattr(remote, "capabilities", lambda: {"can_create": True})
+    monkeypatch.setattr(remote, "receipt_path", lambda _: path)
+    monkeypatch.setattr(remote, "user_exists", lambda _: user if receipt_state else None)
+    monkeypatch.setattr(remote, "Path", lambda _, name: tmp_path / name)
+    monkeypatch.setattr(remote, "safe_directory", lambda _: tmp_path)
+    monkeypatch.setattr(remote.pwd, "getpwall", lambda: [])
+    monkeypatch.setattr(remote, "run", lambda *_: None)
+
+    def sudo_status(name):
+        assert name == "researcher"
+        assert json.loads(path.read_text())["state"] == "active"
+        return {"is_admin": None if expected is None else bool(expected)}
+
+    monkeypatch.setattr(remote, "sudo_status", sudo_status)
+    monkeypatch.setattr(
+        app.state.service.remote,
+        "execute",
+        lambda machine, action, data: remote.create(dict(data, admin_username=machine["username"])),
+    )
+    Worker(app.state.db, app.state.service, app.state.config, MemoryMailbox()).process_job(task)
+
+    accounts = client.get("/api/accounts").json()
+    assert [(account["state"], account["is_admin"]) for account in accounts] == [
+        ("active", expected)
+    ]
 
 
 def test_interrupted_privilege_change_reconciles_actual_state_before_retry(

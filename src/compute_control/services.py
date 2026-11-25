@@ -12,7 +12,7 @@ from .archive_recovery import ArchiveRecovery
 from .db import encode
 from .management_passwords import ManagementPasswords, machine_credentials, uses_separate_sudo
 from .people_retirement import PeopleRetirement
-from .portal import PortalOperations
+from .portal import PortalOperations, machine_snapshot_users, matches_machine_account
 from .security import DomainError, validate_password
 
 
@@ -115,7 +115,9 @@ class Service(
             row["creation_blockers"] = capability_reasons(row["capabilities"])
             row["snapshot"] = json.loads(row["snapshot"]) if row["snapshot"] else None
             if row["snapshot"]:
-                for field in ("users", "processes", "active_user_processes"):
+                row["snapshot"].pop("system_accounts", None)
+                row["snapshot"]["users"] = machine_snapshot_users(row["snapshot"])
+                for field in ("processes", "active_user_processes"):
                     row["snapshot"][field] = [
                         item
                         for item in row["snapshot"].get(field, [])
@@ -126,17 +128,21 @@ class Service(
                         name for name in row["snapshot"]["existing_usernames"] if name != "root"
                     ]
                 mappings = {
-                    item["username"]: item["name"]
+                    item["username"]: item
                     for item in self.db.all(
-                        "SELECT a.username,p.name FROM accounts a JOIN applicants p ON p.id=a.person_id "
-                        "WHERE a.machine_id=? AND a.occupies=1",
+                        "SELECT a.username,a.uid,a.home,a.state,a.occupies,p.name "
+                        "FROM accounts a JOIN applicants p ON p.id=a.person_id WHERE a.machine_id=?",
                         (row["id"],),
                     )
                 }
                 for user in row["snapshot"]["users"]:
                     machine_admin = user["username"] == row["username"]
+                    record = mappings.get(user["username"])
+                    managed = matches_machine_account(record, user)
                     user["is_machine_admin"] = machine_admin
-                    user["registered"] = machine_admin or user["username"] in mappings
+                    user["registered"] = machine_admin or managed
+                    if session["role"] == "admin":
+                        user["same_name_record"] = record is not None and not managed
                     user["registration_source"] = (
                         "machine_admin"
                         if machine_admin
@@ -145,7 +151,7 @@ class Service(
                         else None
                     )
                     user["person_name"] = (
-                        "机器管理员" if machine_admin else mappings.get(user["username"])
+                        "机器管理员" if machine_admin else record["name"] if managed else None
                     )
             row["latest_note"] = self.db.one(
                 "SELECT author_name,content,created,(SELECT COUNT(*) FROM machine_notes WHERE machine_id=?) AS total FROM machine_notes WHERE machine_id=? ORDER BY created DESC,id DESC LIMIT 1",
@@ -305,8 +311,9 @@ class Service(
             )
         }
         for row in rows:
+            row["has_pending_job"] = row["id"] in pending
             row["can_clear_ledger"] = (
-                row["state"] == "retired" and not row["occupies"] and row["id"] not in pending
+                row["state"] == "retired" and not row["occupies"] and not row["has_pending_job"]
             )
             observed = row.pop("observed_login")
             row["last_active"] = max(
@@ -418,25 +425,75 @@ class Service(
             raise DomainError("账号不存在或无权访问", 404)
         return account
 
-    def retire_account(self, session, account_id):
+    def retirement_activity(self, account_id):
+        account = self.authorize_account({"role": "admin"}, account_id)
+        machine = self.db.one("SELECT * FROM machines WHERE id=?", (account["machine_id"],))
+        return self.remote.execute(
+            machine,
+            "retirement_activity",
+            {"account_id": account_id, "username": account["username"]},
+        )
+
+    def retire_account(
+        self,
+        session,
+        account_id,
+        *,
+        process_review=None,
+        review_job_id=None,
+        archive_special_objects=False,
+    ):
+        forced = process_review is not None or archive_special_objects
+        if (forced or review_job_id) and session["role"] != "admin":
+            raise DomainError("仅管理员可处理受阻回收", 403)
+        if forced and not review_job_id:
+            raise DomainError("请先打开待审阅的回收任务", 409)
         self.authorize_account(session, account_id)
         with self.db.connect(write=True) as conn:
             account = conn.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
             self.guard_reboot(conn, account["machine_id"])
             if account["state"] not in ["active", "suspended", "archive_failed", "needs_reconcile"]:
                 raise DomainError("账号当前状态不能提交回收", 409)
+            if account["state"] == "archive_failed" and session["role"] != "admin":
+                raise DomainError("该回收已暂停，请管理员在审阅页面处理", 409)
+            if review_job_id:
+                latest = conn.execute(
+                    "SELECT id,kind,state FROM jobs WHERE account_id=? AND kind<>'reconcile' "
+                    "ORDER BY created DESC,id DESC LIMIT 1",
+                    (account_id,),
+                ).fetchone()
+                expected = (review_job_id, "retire", "needs_reconcile")
+                reviewable = account["state"] in ("archive_failed", "needs_reconcile")
+                if not reviewable or latest is None or tuple(latest) != expected:
+                    raise DomainError("回收审阅任务已变化，请更新显示", 409)
             if conn.execute(
                 "SELECT id FROM jobs WHERE account_id=? AND state IN ('queued','running')",
                 (account_id,),
             ).fetchone():
                 raise DomainError("账号已有待执行任务", 409)
             job_id, now = new_id(), time.time()
+            params = {"process_review": process_review} if process_review else {}
+            if archive_special_objects:
+                params["archive_special_objects"] = True
             conn.execute(
-                "INSERT INTO jobs(id,account_id,machine_id,kind,state,created,updated,request_key) VALUES (?,?,?,?,?,?,?,?)",
-                (job_id, account_id, account["machine_id"], "retire", "queued", now, now, new_id()),
+                "INSERT INTO jobs(id,account_id,machine_id,kind,state,created,updated,request_key,params) VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    job_id,
+                    account_id,
+                    account["machine_id"],
+                    "retire",
+                    "queued",
+                    now,
+                    now,
+                    new_id(),
+                    encode(params),
+                ),
             )
             conn.execute("UPDATE accounts SET state='recycle_requested' WHERE id=?", (account_id,))
-            self.db.audit(conn, actor(session), "account.retire", account_id)
+            action = "account.retire_stop_processes" if process_review else "account.retire"
+            if archive_special_objects:
+                action += "_special_objects"
+            self.db.audit(conn, actor(session), action, account_id)
         return self.db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
 
     def update_machine(self, machine_id, data):

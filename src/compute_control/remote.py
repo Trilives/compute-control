@@ -9,11 +9,15 @@ import os
 import pwd
 import re
 import shutil
+import signal
+import socket
 import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
+from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 
 
@@ -77,10 +81,10 @@ def atomic_json(path, value):
     os.replace(temporary, path)
 
 
-def receipt_path(account_id):
+def receipt_path(account_id, create=True):
     if not re.fullmatch("[0-9a-f]{32}", account_id):
         raise Refuse("账号标识非法")
-    return safe_directory("/var/lib/compute-control/jobs", True) / (account_id + ".json")
+    return safe_directory("/var/lib/compute-control/jobs", create) / (account_id + ".json")
 
 
 def sssd_in_use():
@@ -197,9 +201,8 @@ def system_tool_inventory(checks):
     return result
 
 
-def user_activity(users):
-    names = {user.pw_uid: user.pw_name for user in users}
-    skipped, pid = set(), os.getpid()
+def process_ancestry():
+    skipped, pid = {1}, os.getpid()
     while pid > 1 and pid not in skipped:
         skipped.add(pid)
         try:
@@ -208,6 +211,12 @@ def user_activity(users):
             pid = int(text[text.rfind(")") + 1 :].split()[1])
         except (OSError, ValueError, IndexError):
             break
+    return skipped
+
+
+def user_activity(users):
+    names = {user.pw_uid: user.pw_name for user in users}
+    skipped = process_ancestry()
     active, unknown = [], False
     for path in Path("/proc").glob("[0-9]*"):
         try:
@@ -371,13 +380,15 @@ def create(payload):
     if evidence and evidence.get("name") == name and account:
         if evidence.get("uid") != account.pw_uid or evidence.get("home") != account.pw_dir:
             raise Refuse("账号创建证据与主机状态不符，需管理员核查")
-        if evidence.get("state") in ["active", "quiesced", "verified", "retired"]:
-            return {key: evidence[key] for key in ["uid", "home", "state"]}
         if evidence.get("state") == "setting_password" and password:
             run(["chpasswd"], f"{name}:{password}\n")
             evidence["state"] = "active"
             atomic_json(path, evidence)
-            return {"uid": account.pw_uid, "home": account.pw_dir, "state": "active"}
+        if evidence.get("state") in ["active", "quiesced", "verified", "retired"]:
+            result = {key: evidence[key] for key in ["uid", "home", "state"]}
+            if result["state"] == "active":
+                result.update(sudo_status(name))
+            return result
         raise Refuse("创建中断，需管理员核查原任务证据")
     if account or Path("/home", name).exists() or evidence:
         raise Refuse("用户名、主目录或任务证据已存在，禁止覆盖")
@@ -415,7 +426,18 @@ def create(payload):
     run(["chpasswd"], f"{name}:{password}\n")
     evidence["state"] = "active"
     atomic_json(path, evidence)
-    return {"uid": uid, "home": home, "state": "active"}
+    return {"uid": uid, "home": home, "state": "active", **sudo_status(name)}
+
+
+def process_uses_home(process, home):
+    for link in [process / "cwd", *(process / "fd").iterdir()]:
+        try:
+            target = os.readlink(link)
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if target == home or target.startswith(home + "/"):
+            return True
+    return False
 
 
 def active_processes(uid, home):
@@ -424,23 +446,22 @@ def active_processes(uid, home):
         if not process.name.isdigit():
             continue
         try:
-            if process.stat().st_uid == uid:
-                busy.append(int(process.name))
-                continue
-            # Conservatively block external processes with any open home file or cwd.
-            links = [process / "cwd", *list((process / "fd").iterdir())]
-            if any(
-                os.readlink(link).startswith(home + "/") or os.readlink(link) == home
-                for link in links
-                if link.is_symlink()
-            ):
+            if process.stat().st_uid == uid or process_uses_home(process, home):
                 busy.append(int(process.name))
         except (FileNotFoundError, ProcessLookupError):
             pass
     return busy
 
 
-def manifest(home):
+SPECIAL_FILE_TYPES = {
+    stat.S_IFIFO: "fifo",
+    stat.S_IFSOCK: "socket",
+    stat.S_IFCHR: "char",
+    stat.S_IFBLK: "block",
+}
+
+
+def manifest(home, include_special=False):
     entries = {}
 
     def visit(path):
@@ -465,7 +486,12 @@ def manifest(home):
         elif stat.S_ISLNK(info.st_mode):
             entry["link"] = os.readlink(path)
         elif not stat.S_ISDIR(info.st_mode):
-            raise Refuse("主目录存在特殊对象，需管理员处理")
+            kind = SPECIAL_FILE_TYPES.get(stat.S_IFMT(info.st_mode))
+            if not kind or not include_special:
+                raise Refuse("主目录存在特殊对象，需管理员处理")
+            entry.update(special=kind, inode=info.st_ino, links=info.st_nlink)
+            if kind in ("char", "block"):
+                entry["rdev"] = info.st_rdev
         entries[relative] = entry
         if stat.S_ISDIR(info.st_mode):
             for child in sorted(path.iterdir()):
@@ -475,8 +501,51 @@ def manifest(home):
     return entries
 
 
-def retire(payload):
-    path = receipt_path(payload["account_id"])
+def preview_special_objects(home):
+    objects, deadline = [], time.monotonic() + 5
+
+    def unavailable(error):
+        raise error
+
+    try:
+        for directory, _, files, descriptor in os.fwalk(
+            home, follow_symlinks=False, onerror=unavailable
+        ):
+            if time.monotonic() >= deadline:
+                return objects, True
+            for name in files:
+                if len(objects) >= 32 or time.monotonic() >= deadline:
+                    return objects, True
+                try:
+                    info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if kind := SPECIAL_FILE_TYPES.get(stat.S_IFMT(info.st_mode)):
+                    relative = str((Path(directory) / name).relative_to(home))
+                    objects.append({"path": relative, "kind": kind})
+    except OSError:
+        return objects, True
+    return objects, False
+
+
+def retirement_mount_blocker(home):
+    for line in Path("/proc/mounts").read_text().splitlines():
+        parts = line.split()
+        target = parts[1].replace("\\040", " ")
+        if target == str(home) or target.startswith(str(home) + "/"):
+            return "主目录内存在挂载点，需管理员处理"
+        if str(home).startswith(target.rstrip("/") + "/") and parts[2] in [
+            "nfs",
+            "nfs4",
+            "cifs",
+            "ceph",
+            "lustre",
+        ]:
+            return "共享文件系统不允许自动回收"
+    return None
+
+
+def retirement_target(payload, path):
     if not path.exists():
         raise Refuse("无本系统创建证据，禁止回收")
     proof = json.loads(path.read_text())
@@ -484,8 +553,8 @@ def retire(payload):
     if name != payload["username"] or uid < 1000 or name == payload["admin_username"]:
         raise Refuse("受保护账号或身份不匹配")
     account = user_exists(name)
-    if proof["state"] == "retired" and not account:
-        return {key: proof[key] for key in ["state", "archive", "checksum", "size"]}
+    if proof["state"] in ["retired", "cleaned"] and not account:
+        return proof, None
     if not account or account.pw_uid != uid or account.pw_dir != str(home):
         raise Refuse("账号/UID/home 与创建证据不符")
     if not local_user(name) or home != Path("/home") / name or home.is_symlink():
@@ -498,31 +567,184 @@ def retire(payload):
         for item in pwd.getpwall()
     ):
         raise Refuse("检测到共享 UID 或主目录，禁止自动回收")
-    mounts = Path("/proc/mounts").read_text().splitlines()
-    for line in mounts:
-        parts = line.split()
-        target = parts[1].replace("\\040", " ")
-        if target == str(home) or target.startswith(str(home) + "/"):
-            raise Refuse("主目录内存在挂载点，需管理员处理")
-        if str(home).startswith(target.rstrip("/") + "/") and parts[2] in [
-            "nfs",
-            "nfs4",
-            "cifs",
-            "ceph",
-            "lustre",
-        ]:
-            raise Refuse("共享文件系统不允许自动回收")
-    busy = active_processes(uid, str(home))
-    if busy:
-        raise Refuse("账号或主目录仍被进程使用，请先结束工作")
-    for directory in ["/var/spool/cron", "/var/spool/cron/crontabs", "/var/lib/systemd/linger"]:
+    return proof, account
+
+
+def retirement_schedule_blocker(name):
+    for directory, kind in (
+        ("/var/spool/cron", "cron 调度"),
+        ("/var/spool/cron/crontabs", "cron 调度"),
+        ("/var/lib/systemd/linger", "systemd lingering"),
+    ):
         if Path(directory, name).exists():
-            raise Refuse("存在 cron 或 lingering，需管理员先停用并保存恢复信息")
+            return f"存在 {kind}，需管理员先停用并保存恢复信息"
     if shutil.which("atq") and run(["atq"]).strip():
-        raise Refuse("存在 at 任务，需管理员核查后处理")
+        return "存在 at 任务，需管理员核查后处理"
+    return None
+
+
+def retirement_process(pid):
+    process = Path("/proc", str(pid))
+    try:
+        name = (process / "comm").read_text(errors="replace").strip()
+        status = (process / "status").read_text(errors="replace").splitlines()
+        uids = next(
+            [int(uid) for uid in line.split()[1:]] for line in status if line.startswith("Uid:")
+        )
+        # The process name in stat can contain spaces and parentheses.
+        stat_fields = (process / "stat").read_text(errors="replace").rsplit(")", 1)[1].split()
+        start_time = int(stat_fields[19])
+        identity = {"pid": pid, "name": name, "uid": uids[1], "start_time": start_time}
+        return {"pid": pid, "name": name, "uid": uids[1]}, (
+            identity if name and uids == [uids[1]] * 4 else None
+        )
+    except (OSError, IndexError, ValueError, StopIteration):
+        return {"pid": pid, "name": "名称不可用", "uid": None}, None
+
+
+def retirement_activity(payload):
+    try:
+        path = receipt_path(payload["account_id"], create=False)
+    except FileNotFoundError as exc:
+        raise Refuse("无本系统创建证据，禁止回收") from exc
+    proof, account = retirement_target(payload, path)
+    if account is None:
+        return {"processes": [], "schedule_blocker": None, "retired": True}
+    uid = proof["uid"]
+    busy = sorted(active_processes(uid, proof["home"]))
+    observations = [retirement_process(pid) for pid in busy]
+    blocker = retirement_schedule_blocker(proof["name"])
+    home = Path(proof["home"])
+    mount_blocker = retirement_mount_blocker(home)
+    special, incomplete = preview_special_objects(home) if not mount_blocker else ([], False)
+    report = {
+        "processes": [item for item, _ in observations],
+        "schedule_blocker": blocker,
+        "target_uid": uid,
+        "filesystem_blocker": mount_blocker,
+        "special_objects": special,
+        "special_scan_incomplete": incomplete,
+    }
+    reviewed = [identity for _, identity in observations]
+    if reviewed and not blocker and all(reviewed) and not set(busy) & process_ancestry():
+        try:
+            if hasattr(signal, "pidfd_send_signal"):
+                os.close(os.pidfd_open(os.getpid()))
+                report["process_review"] = {
+                    "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+                    "processes": reviewed,
+                }
+        except (AttributeError, OSError):
+            pass
+    return report
+
+
+def signal_reviewed_processes(handles, uid, gid):
+    child = os.fork()
+    if child == 0:
+        status = 1
+        try:
+            os.setgroups([])
+            os.setgid(gid)
+            os.setuid(uid)
+            for handle in handles:
+                try:
+                    signal.pidfd_send_signal(handle, signal.SIGTERM)
+                except ProcessLookupError:
+                    continue
+            status = 0
+        finally:
+            os._exit(status)
+    if os.waitpid(child, 0)[1]:
+        raise Refuse("部分进程未能请求退出，回收暂停")
+
+
+def stop_reviewed_processes(review, busy, uid, home, gid):
+    if review["boot_id"] != Path("/proc/sys/kernel/random/boot_id").read_text().strip():
+        raise Refuse("机器已重启，请重新检查活动后确认")
+    approved = {item["pid"]: item for item in review["processes"]}
+    protected = process_ancestry()
+    with ExitStack() as stack:
+        handles = {}
+        for pid in busy:
+            if pid in protected:
+                raise Refuse("占用涉及当前管理连接的进程，请在主机处理")
+            try:
+                handle = os.pidfd_open(pid)
+            except ProcessLookupError:
+                continue
+            except (AttributeError, OSError) as exc:
+                raise Refuse("无法安全锁定进程，请重新检查活动") from exc
+            stack.callback(os.close, handle)
+            _, identity = retirement_process(pid)
+            if identity is None or identity != approved.get(pid):
+                raise Refuse("发现新增或身份变更的进程，请重新检查活动")
+            owner = identity["uid"]
+            if owner != uid:
+                try:
+                    if not process_uses_home(Path("/proc", str(pid)), home):
+                        continue
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+            handles.setdefault(owner, []).append(handle)
+        for owner, descriptors in handles.items():
+            try:
+                owner_gid = gid if owner == uid else pwd.getpwuid(owner).pw_gid
+            except KeyError:
+                owner_gid = owner
+            signal_reviewed_processes(descriptors, owner, owner_gid)
+        deadline = time.monotonic() + 10
+        while active_processes(uid, home):
+            if time.monotonic() >= deadline:
+                raise Refuse("仍有进程或主目录使用者，回收暂停，请重新检查活动")
+            time.sleep(0.25)
+
+
+def write_home_tar(home, target, archived_names, include_list):
+    command = [
+        "tar",
+        "--acls",
+        "--xattrs",
+        "--sparse",
+        "--numeric-owner",
+        "--format=pax",
+        "-cpf",
+        str(target),
+        "-C",
+        str(home),
+    ]
+    if not include_list:
+        run([*command, "."])
+        return
+    # GNU tar cannot serialize Unix sockets and can lose special-file hardlinks.
+    with tempfile.NamedTemporaryFile(dir=target.parent) as names:
+        for name in archived_names:
+            names.write(os.fsencode("./" + name if name != "." else ".") + b"\0")
+        names.flush()
+        run([*command, "--no-recursion", "--null", "--files-from", names.name])
+
+
+def retire(payload):
+    path = receipt_path(payload["account_id"])
+    proof, account = retirement_target(payload, path)
+    if account is None:
+        return {key: proof[key] for key in ["state", "archive", "checksum", "size"]}
+    name, uid, home = proof["name"], proof["uid"], Path(proof["home"])
+    if blocker := retirement_mount_blocker(home):
+        raise Refuse(blocker)
+    busy = active_processes(uid, str(home))
+    review = payload.get("process_review")
+    if busy and not review:
+        raise Refuse("账号或主目录仍被进程使用，请先结束工作")
+    if blocker := retirement_schedule_blocker(name):
+        raise Refuse(blocker)
     sshd = run(["sshd", "-T", "-C", f"user={name},host=localhost,addr=127.0.0.1"])
     if "usepam yes" not in sshd.splitlines():
         raise Refuse("SSH 未启用 PAM，不能确认账号过期可阻止密钥登录")
+    if review:
+        stop_reviewed_processes(review, busy, uid, str(home), account.pw_gid)
+        if blocker := retirement_schedule_blocker(name):
+            raise Refuse(blocker)
     if proof["state"] == "active":
         shadow = next(
             line.split(":")
@@ -556,30 +778,18 @@ def retire(payload):
     ):
         raise Refuse("归档目录与 home 重叠")
     target = safe_directory(archive_root / payload["account_id"] / payload["job_id"], True)
-    before = manifest(home)
+    include_special = bool(payload.get("archive_special_objects"))
+    before = manifest(home, include_special)
+    archived_names = [name for name, entry in before.items() if "special" not in entry]
     needed = sum(entry.get("size", 0) for entry in before.values())
     if shutil.disk_usage(target).free < needed + max(needed // 10, 64 * 1024 * 1024):
         raise Refuse("归档空间不足")
     temporary = target / "home.partial.tar"
     if temporary.exists():
         raise Refuse("已有未完成归档，需管理员核查，不能覆盖")
-    run(
-        [
-            "tar",
-            "--acls",
-            "--xattrs",
-            "--sparse",
-            "--numeric-owner",
-            "--format=pax",
-            "-cpf",
-            str(temporary),
-            "-C",
-            str(home),
-            ".",
-        ]
-    )
+    write_home_tar(home, temporary, archived_names, len(archived_names) != len(before))
     run(["tar", "--acls", "--xattrs", "--compare", "-f", str(temporary), "-C", str(home)])
-    if manifest(home) != before or active_processes(uid, str(home)):
+    if manifest(home, include_special) != before or active_processes(uid, str(home)):
         raise Refuse("归档期间主目录发生变化，保留原账号及数据")
     with tarfile.open(temporary) as archive:
         archived = set()
@@ -593,15 +803,20 @@ def retire(payload):
                 content = archive.extractfile(member)
                 if content is None or file_hash(content) != entry["sha256"]:
                     raise Refuse("归档内容校验失败")
-        if archived != set(before):
+        if archived != set(archived_names):
             raise Refuse("归档缺少条目")
     with temporary.open("rb") as handle:
         checksum = file_hash(handle)
     final = target / "home.tar"
     os.replace(temporary, final)
-    atomic_json(target / "manifest.json", before)
+    manifest_path = target / "manifest.json"
+    atomic_json(manifest_path, before)
+    with manifest_path.open("rb") as handle:
+        proof["manifest_checksum"] = file_hash(handle)
     atomic_json(target / "retirement-metadata.json", proof)
-    (target / "checksum.sha256").write_text(checksum + "  home.tar\n")
+    (target / "checksum.sha256").write_text(
+        checksum + "  home.tar\n" + proof["manifest_checksum"] + "  manifest.json\n"
+    )
     proof.update(state="verified", archive=str(final), checksum=checksum, size=final.stat().st_size)
     atomic_json(path, proof)
     if user_exists(name).pw_uid != uid or home.is_symlink() or active_processes(uid, str(home)):
@@ -630,10 +845,9 @@ def known_account(payload):
 
 
 def reconcile(payload):
-    raw_path = receipt_path(payload["account_id"])
-    if not raw_path.exists():
+    if not receipt_path(payload["account_id"]).exists():
         return {"state": "not_created"}
-    path, proof = known_account(payload)
+    _, proof = known_account(payload)
     account = user_exists(proof["name"])
     if proof["state"] == "creating" and not account and not Path(proof["home"]).exists():
         return {"state": "not_created"}
@@ -648,10 +862,16 @@ def reconcile(payload):
                 "last_restore_job": proof.get("last_restore_job"),
                 **sudo_status(proof["name"]),
             }
+        if proof["state"] == "verified":
+            raise Refuse("远端账号仍存在，回执显示归档已校验，账号删除尚待核查")
+        if proof["state"] == "quiesced":
+            raise Refuse("远端账号仍存在，回执显示登录已停用，回收尚未完成")
         raise Refuse("账号存在但未处于可用状态，请检查原任务或恢复登录")
     if not account and proof["state"] in ["retired", "cleaned"]:
         return {key: proof[key] for key in ["state", "archive", "checksum", "size"]}
-    raise Refuse("远端状态不明，不释放额度或自动重试")
+    if account:
+        raise Refuse("远端账号仍存在，但 UID 或主目录与回执不符，需人工核查")
+    raise Refuse("远端账号不存在，回执尚未确认回收完成，需人工核查")
 
 
 def verify_archive(proof):
@@ -663,6 +883,20 @@ def verify_archive(proof):
         if file_hash(handle) != proof["checksum"]:
             raise Refuse("归档校验摘要不符")
     return archive
+
+
+def read_archive_manifest(archive, proof):
+    path = archive.parent / "manifest.json"
+    if path.is_symlink() or not path.is_file():
+        raise Refuse("归档清单缺失或路径异常")
+    content = path.read_bytes()
+    checksum = proof.get("manifest_checksum")
+    if checksum and hashlib.sha256(content).hexdigest() != checksum:
+        raise Refuse("归档清单摘要不符")
+    saved = json.loads(content)
+    if not checksum and any("special" in item for item in saved.values()):
+        raise Refuse("特殊对象缺少已校验的归档清单")
+    return saved
 
 
 def cleanup(payload):
@@ -686,8 +920,10 @@ def cleanup(payload):
         target = line.split()[1].replace("\\040", " ")
         if target == str(home) or target.startswith(str(home) + "/"):
             raise Refuse("home 内存在挂载点，暂停清理")
-    saved = json.loads((archive.parent / "manifest.json").read_text())
-    if manifest(home) != saved or active_processes(proof["uid"], str(home)):
+    saved = read_archive_manifest(archive, proof)
+    if manifest(home, bool(proof.get("manifest_checksum"))) != saved or active_processes(
+        proof["uid"], str(home)
+    ):
         raise Refuse("home 内容变化或仍被使用，禁止清理")
     if not shutil.rmtree.avoids_symlink_attacks:
         raise Refuse("平台不支持安全目录清理")
@@ -701,14 +937,63 @@ def restored_manifest(home):
     # Inodes change on extraction; internal hardlink counts and all other metadata must match.
     return {
         name: {key: value for key, value in entry.items() if key != "inode"}
-        for name, entry in manifest(home).items()
+        for name, entry in manifest(home, include_special=True).items()
     }
+
+
+def validate_archive_path(raw, saved):
+    name = str(raw)
+    if raw.is_absolute() or ".." in raw.parts or name not in saved:
+        raise Refuse("归档存在不安全路径")
+    for parent in raw.parents:
+        if str(parent) not in saved or not stat.S_ISDIR(saved[str(parent)]["mode"]):
+            raise Refuse("归档路径经过非目录条目")
+    return name
+
+
+def restore_special_objects(stage, saved, special):
+    parents, restored = {stage}, {}
+    with tempfile.TemporaryDirectory(dir=stage) as scratch:
+        descriptor = os.open(scratch, os.O_DIRECTORY)
+        try:
+            for name in sorted(special):
+                destination, entry = stage / name, saved[name]
+                mode, inode = entry["mode"], entry["inode"]
+                if inode in restored:
+                    os.link(restored[inode], destination, follow_symlinks=False)
+                else:
+                    kind = entry["special"]
+                    if kind == "fifo":
+                        os.mkfifo(destination)
+                    elif kind in ("char", "block"):
+                        os.mknod(destination, stat.S_IFMT(mode) | 0o600, entry["rdev"])
+                    else:
+                        # The short descriptor-relative name also supports deeply nested homes.
+                        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as node:
+                            node.bind(f"/proc/self/fd/{descriptor}/node")
+                        os.link(Path(scratch) / "node", destination, follow_symlinks=False)
+                        (Path(scratch) / "node").unlink()
+                    os.chown(destination, entry["uid"], entry["gid"], follow_symlinks=False)
+                    os.chmod(destination, stat.S_IMODE(mode))
+                    for attr, value in entry["xattrs"].items():
+                        os.setxattr(
+                            destination, attr, base64.b64decode(value), follow_symlinks=False
+                        )
+                    stamp = entry["mtime_ns"]
+                    os.utime(destination, ns=(stamp, stamp), follow_symlinks=False)
+                    restored[inode] = destination
+                parents.add(destination.parent)
+        finally:
+            os.close(descriptor)
+    for parent in parents:
+        stamp = saved[str(parent.relative_to(stage))]["mtime_ns"]
+        os.utime(parent, ns=(stamp, stamp), follow_symlinks=False)
 
 
 def restore_home(path, proof, payload):
     home = Path(proof["home"])
     archive = verify_archive(proof)
-    saved = json.loads((archive.parent / "manifest.json").read_text())
+    saved = read_archive_manifest(archive, proof)
     expected = {
         name: {key: value for key, value in entry.items() if key != "inode"}
         for name, entry in saved.items()
@@ -721,19 +1006,27 @@ def restore_home(path, proof, payload):
         ):
             raise Refuse("目标主目录已存在，禁止覆盖")
         return
+    special = {name for name, entry in saved.items() if "special" in entry}
+    for name in special:
+        if validate_archive_path(PurePosixPath(name), saved) != name or name == ".":
+            raise Refuse("归档特殊对象路径异常")
+        entry = saved[name]
+        if SPECIAL_FILE_TYPES.get(stat.S_IFMT(entry["mode"])) != entry["special"]:
+            raise Refuse("归档特殊对象类型不符")
     with tarfile.open(archive) as contents:
         names = set()
         for member in contents:
-            raw = PurePosixPath(member.name)
-            name = str(raw)
-            if raw.is_absolute() or ".." in raw.parts or name in names or name not in saved:
-                raise Refuse("归档存在不安全或重复路径")
+            name = validate_archive_path(PurePosixPath(member.name), saved)
+            if name in names or name in special:
+                raise Refuse("归档存在重复路径")
             names.add(name)
-            if not (member.isdir() or member.isfile() or member.issym() or member.islnk()):
-                raise Refuse("归档包含特殊对象")
-            for parent in raw.parents:
-                if str(parent) not in saved or not stat.S_ISDIR(saved[str(parent)]["mode"]):
-                    raise Refuse("归档路径经过非目录条目")
+            mode = saved[name]["mode"]
+            if not (
+                (member.isdir() and stat.S_ISDIR(mode))
+                or (member.issym() and stat.S_ISLNK(mode))
+                or ((member.isfile() or member.islnk()) and stat.S_ISREG(mode))
+            ):
+                raise Refuse("归档条目类型与清单不符")
             if member.islnk():
                 link = PurePosixPath(member.linkname)
                 if (
@@ -743,7 +1036,7 @@ def restore_home(path, proof, payload):
                     or not stat.S_ISREG(saved[str(link)]["mode"])
                 ):
                     raise Refuse("归档硬链接目标异常")
-        if names != set(saved):
+        if names != set(saved) - special:
             raise Refuse("归档条目不完整")
     required = sum(item.get("size", 0) for item in saved.values())
     if shutil.disk_usage(home.parent).free < required + max(required // 10, 64 * 1024 * 1024):
@@ -773,6 +1066,8 @@ def restore_home(path, proof, payload):
             str(stage),
         ]
     )
+    if special:
+        restore_special_objects(stage, saved, special)
     if restored_manifest(stage) != expected:
         raise Refuse("恢复目录内容或元数据校验失败，保留临时目录供核查")
     # GNU mv uses no-replace semantics; never merge into or overwrite an existing home.
@@ -804,6 +1099,7 @@ def selected_archive_proof(proof, payload):
         if home.exists() or home.is_symlink():
             raise Refuse("原目录仍存在，不能用另一个归档覆盖")
         selected.pop("home_restore_job", None)
+        selected["manifest_checksum"] = metadata.get("manifest_checksum")
     selected["restore"] = metadata.get("restore") or {}
     selected.pop("archive_deleted", None)
     selected.pop("archive_delete_intent", None)
@@ -1204,6 +1500,7 @@ def main():
             "inspect": inspect,
             "create": create,
             "retire": retire,
+            "retirement_activity": retirement_activity,
             "reconcile": reconcile,
             "cleanup": cleanup,
             "restore": restore,
@@ -1222,8 +1519,8 @@ def main():
         expected = payload.get("expected_identity")
         if expected and Path("/etc/machine-id").read_text().strip() != expected:
             raise Refuse("机器身份发生变化，停止操作")
-        if action == "inspect":
-            result = inspect(payload)
+        if action in ["inspect", "retirement_activity"]:
+            result = operations[action](payload)
         else:
             import fcntl
 

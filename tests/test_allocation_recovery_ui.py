@@ -2,12 +2,14 @@
 
 import json
 
-from conftest import login, machine, person
+from conftest import apply, login, machine, person
 from fastapi.testclient import TestClient
 from playwright.sync_api import expect
 from test_account_recovery import recycled
 from test_machine_management_ui import enter_admin
 from test_worker import worker
+
+from compute_control.security import DomainError
 
 
 def test_closed_machine_allocation_from_machine_menu(app, live_page):
@@ -65,3 +67,25 @@ def test_retired_records_only_appear_in_admin_recycle_bin(app, live_page):
     page.locator("#tabs").get_by_role("button", name="归档记录", exact=True).click()
     expect(page.locator("#content")).to_contain_text("researcher")
     expect(page.get_by_role("button", name="恢复账号", exact=True)).to_be_visible()
+
+
+def test_admin_sees_account_check_result_when_background_job_completes(app, live_page):
+    owner, target = person(app), machine(app)
+    runner = worker(app)
+    created = apply(app, owner, target)
+    app.state.service.remote.error = DomainError("SSH 中断", 502)
+    runner.process_job(created)
+    app.state.service.remote.error = None
+
+    page = live_page
+    enter_admin(page)
+    page.locator("#tabs").get_by_role("button", name="账号台账", exact=True).click()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.get_by_role("button", name="检查账号状态", exact=True).click()
+    expect(page.locator("#page-title")).to_have_text("后台任务")
+    check = app.state.db.one("SELECT * FROM jobs WHERE kind='reconcile'")
+    row = page.get_by_role("row").filter(has_text=check["id"])
+    expect(row).to_contain_text("排队中")
+    runner.process_job(check)
+    expect(row).to_contain_text("已完成 · 远端账号仍存在，回执状态为可使用")
+    expect(row).to_contain_text("UID 1001 · 主目录 /home/researcher")

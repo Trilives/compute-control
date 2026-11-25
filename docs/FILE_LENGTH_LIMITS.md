@@ -37,10 +37,10 @@
 | `src/compute_control/cli.py` | 140 | 87 | 无 | 初始化、Web 和 worker 的本机命令装配 |
 | `src/compute_control/config.py` | 110 | 59 | 无 | 启动配置加载与校验，说明留在配置文档 |
 | `src/compute_control/db.py` | 180 | 163 | 无 | 首版表结构、连接、事务和基础审计持久化 |
-| `src/compute_control/models.py` | 130 | 114 | 无 | 公共请求的类型和校验规则 |
-| `src/compute_control/remote.py` | 1300 | 980 | 无 | 一次 SSH 传输的自包含固定操作；含只读工具检测、接管、改密和立即重启，不安装远端服务 |
+| `src/compute_control/models.py` | 150 | 114 | 无 | 公共请求类型、校验规则和回收进程确认 |
+| `src/compute_control/remote.py` | 1600 | 980 | 无 | 一次 SSH 传输的自包含固定操作，含特殊对象预览、归档校验和恢复 |
 | `src/compute_control/security.py` | 190 | 138 | 无 | 密码、会话及凭据加密，不混入 HTTP 页面 |
-| `src/compute_control/services.py` | 600 | 498 | 无 | 既有机器、额度、台账业务及重启维护检查；管理操作拆到同职责文件 |
+| `src/compute_control/services.py` | 620 | 498 | 无 | 机器、额度、台账及回收确认入队 |
 | `src/compute_control/ssh.py` | 190 | 142 | 无 | 固定指纹及分离 sudo/操作输入协议 |
 | `src/compute_control/static/app.css` | 180 | 126 | 无 | 当前页面布局与响应式样式 |
 | `src/compute_control/static/app.js` | 280 | 258 | 无 | 单控制台交互与 API 调用，无 Linux 命令或业务授权规则 |
@@ -48,7 +48,7 @@
 | `src/compute_control/worker.py` | 450 | 402 | 无 | 持久任务、采集调度、密码交接及独立强制重启执行槽 |
 | `tests/conftest.py` | 190 | 165 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
 | `tests/test_accounts.py` | 190 | 179 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
-| `tests/test_archive.py` | 280 | 194 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
+| `tests/test_archive.py` | 330 | 194 | 无 | 归档校验、跨账号占用复核、强制回收和失败保留 |
 | `tests/test_auth.py` | 190 | 186 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
 | `tests/test_browser.py` | 280 | 245 | 无 | 真实 Chromium 两角色流程、图表、完整指南、稳定表单与重启确认 |
 | `tests/test_remote_config.py` | 190 | 109 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
@@ -71,7 +71,7 @@
 | `docs/ADMIN_GUIDE.md` | 180 | 158 | 无 | 完整可公开管理员操作说明，直接作为页面弹窗正文 |
 | `docs/DEVELOPMENT_ENVIRONMENT.md` | 60 | 13 | 无 | 工具分层入口及检测边界，清单链接包内唯一数据源 |
 | `docs/records/2026-11-03-admin-management-guides-reboot.md` | 130 | 53 | 无 | 本批授权、实现、验证及交付清理交接，不累加后续无关事项 |
-| `src/compute_control/portal.py` | 300 | 236 | 无 | 公告、联系名单、sudo 权限申请、备注事务删除和历史读取，沿用现有数据与任务契约 |
+| `src/compute_control/portal.py` | 350 | 236 | 无 | 公告、联系名单、sudo 权限申请、备注、历史读取及未接管账号清单 |
 | `src/compute_control/portal_api.py` | 120 | 84 | 无 | 新增接口的角色/CSRF 依赖装配，不混入 Linux 实现 |
 | `src/compute_control/static/portal.js` | 150 | 116 | 无 | 公告、联系人、权限申请和账号开关页面，正文来自 API，不存秘密 |
 | `tests/test_portal.py` | 300 | 224 | 无 | 公告/联系/申请权限、小时采集、失败与历史过滤及旧版迁移验证 |
@@ -130,6 +130,12 @@
 | `src/compute_control/static/archive_admin.js` | 90 | 33 | 无 | 归档记录恢复按钮、密码输入和关闭清理 |
 | `tests/test_archive_recovery_controls.py` | 300 | 215 | 无 | 逐条归档、旧密码、断线核对和浏览器恢复回归 |
 | `docs/records/2026-11-07-archive-recovery.md` | 100 | 16 | 无 | 归档入口合并、密码兼容与长任务核查的验证部署交接 |
+| `src/compute_control/static/jobs.js` | 80 | 42 | 无 | 后台任务状态与对应操作 |
+| `src/compute_control/static/retirement_admin.js` | 150 | 140 | 无 | 回收审阅、特殊对象预览和强制回收的二次确认 |
+| `tests/test_retirement_activity_ui.py` | 120 | 110 | 无 | 合并审阅、任务自动显示及跨账号进程确认的浏览器回归 |
+| `tests/test_special_archive.py` | 150 | 110 | 无 | 特殊对象归档、恢复、校验与浏览器确认 |
+| `src/compute_control/static/account_inventory.js` | 100 | 58 | 无 | 审阅和单机账号共用的表格、权限显示及接管入口 |
+| `tests/test_unmanaged_accounts.py` | 110 | 85 | 无 | 多机器账号身份、权限、筛选与接管表单 |
 
 ## 清理时如何使用
 

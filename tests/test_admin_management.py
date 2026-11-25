@@ -18,6 +18,14 @@ def active_account(app, owner=None, target=None):
     return owner, target, job["account_id"]
 
 
+def test_job_result_column_is_added_to_existing_v4_database(app):
+    job = apply(app, person(app), machine(app))
+    with app.state.db.connect(write=True) as conn:
+        conn.execute("ALTER TABLE jobs DROP COLUMN result")
+    db = Database(app.state.config.runtime_dir)
+    assert db.one("SELECT * FROM jobs WHERE id=?", (job["id"],)) == job
+
+
 def test_delete_name_revokes_session_but_preserves_accounts(app, client):
     owner, target, account_id = active_account(app)
     with TestClient(app) as user:

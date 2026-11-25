@@ -8,7 +8,78 @@ import uuid
 from .security import DomainError
 
 
+def machine_snapshot_users(snapshot):
+    return [
+        user
+        for user in snapshot.get("users", [])
+        if user.get("uid") is not None
+        and user["uid"] >= 1000
+        and user["uid"] != 65534
+        and user["username"] not in {"root", "nobody"}
+    ]
+
+
+def matches_machine_account(record, user):
+    return bool(
+        record
+        and record["occupies"]
+        and record["state"] not in ("adopting", "creating", "waiting_password")
+        and record["uid"] == user["uid"]
+        and record["home"] == user.get("home")
+    )
+
+
 class PortalOperations:
+    def unmanaged_accounts(self):
+        with self.db.connect() as conn:
+            conn.execute("BEGIN")
+            machines = conn.execute(
+                "SELECT id,name,username,snapshot,sampled,error FROM machines ORDER BY name,id"
+            ).fetchall()
+            ledger = {
+                (account["machine_id"], account["username"]): account
+                for account in conn.execute(
+                    "SELECT machine_id,username,uid,home,occupies,state FROM accounts"
+                )
+            }
+        results = []
+        stale_before = time.time() - self.config.snapshot_seconds * 2
+        for machine in machines:
+            snapshot = json.loads(machine["snapshot"]) if machine["snapshot"] else {}
+            rows = []
+            for user in sorted(machine_snapshot_users(snapshot), key=lambda item: item["username"]):
+                username, uid, home = user["username"], user["uid"], user.get("home")
+                is_admin = user.get("is_admin")
+                if username in {"admin", machine["username"]} or is_admin:
+                    continue
+                record = ledger.get((machine["id"], username))
+                if matches_machine_account(record, user):
+                    continue
+                rows.append(
+                    {
+                        "username": username,
+                        "uid": uid,
+                        "home": home,
+                        "sudo_known": is_admin is not None,
+                        "same_name_record": record is not None,
+                        "can_adopt": (
+                            record is None and is_admin is False and home == f"/home/{username}"
+                        ),
+                    }
+                )
+            results.append(
+                {
+                    "id": machine["id"],
+                    "name": machine["name"],
+                    "sampled": machine["sampled"],
+                    "stale": not machine["sampled"] or machine["sampled"] < stale_before,
+                    "has_error": bool(machine["error"]),
+                    "complete_sample": "users" in snapshot,
+                    "accounts": rows,
+                }
+            )
+        return results
+
     def announcements(self, pinned=False):
         return self.db.all(
             "SELECT id,title,content,pinned,created FROM announcements WHERE deleted IS NULL"

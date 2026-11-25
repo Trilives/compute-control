@@ -41,6 +41,8 @@ class FakeRemote:
             raise self.error
         if action == "inspect":
             return copy.deepcopy(REPORT) | {"identity": machine.get("identity") or machine["host"]}
+        if action == "retirement_activity":
+            return {"processes": [], "schedule_blocker": None}
         if action == "cleanup":
             return {"state": "home_cleaned"}
         if action == "delete_archive":

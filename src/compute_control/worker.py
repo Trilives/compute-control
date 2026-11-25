@@ -355,9 +355,13 @@ class Worker:
                     and result.get("is_admin") != json.loads(job["params"])["enabled"]
                 ):
                     raise DomainError("权限变更尚未达到目标，请核对其他 sudoers 授权")
+                report = None
+                if job["kind"] == "reconcile":
+                    fields = ("state", "uid", "home", "is_admin")
+                    report = {field: result[field] for field in fields if field in result}
                 conn.execute(
-                    "UPDATE jobs SET state='succeeded',step='verified',error=NULL,updated=? WHERE id=?",
-                    (time.time(), job["id"]),
+                    "UPDATE jobs SET state='succeeded',step='verified',error=NULL,result=?,updated=? WHERE id=?",
+                    (json.dumps(report) if report is not None else None, time.time(), job["id"]),
                 )
                 self.db.audit(conn, "worker", job["kind"] + ".complete", account["id"])
         except Exception as exc:

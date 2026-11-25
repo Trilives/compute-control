@@ -13,6 +13,7 @@ class Login(Input):
     role: Literal["admin", "applicant"]
     username: str = Field(min_length=1, max_length=80)
     password: SecretStr = SecretStr("")
+    remember_me: bool = Field(default=True, strict=True)
 
 
 class Person(Input):
@@ -81,6 +82,24 @@ class ManagementPassword(Input):
 
 class Confirm(Input):
     confirmed: bool
+
+
+class ReviewedProcess(Input):
+    pid: int = Field(ge=2, strict=True)
+    uid: int = Field(ge=0, strict=True)
+    start_time: int = Field(ge=0, strict=True)
+    name: str = Field(min_length=1, max_length=64)
+
+
+class RetirementProcessReview(Input):
+    boot_id: str = Field(pattern=r"^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$")
+    processes: list[ReviewedProcess] = Field(min_length=1)
+
+
+class Retirement(Confirm):
+    review_job_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    process_review: RetirementProcessReview | None = None
+    archive_special_objects: bool = False
 
 
 class ArchiveRestore(Confirm):

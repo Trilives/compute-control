@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS jobs (
  id TEXT PRIMARY KEY, account_id TEXT REFERENCES accounts(id), machine_id TEXT NOT NULL,
  kind TEXT NOT NULL, state TEXT NOT NULL, step TEXT NOT NULL DEFAULT 'queued',
  error TEXT, created REAL NOT NULL, updated REAL NOT NULL, request_key TEXT UNIQUE NOT NULL,
- params TEXT NOT NULL DEFAULT '{}');
+ params TEXT NOT NULL DEFAULT '{}', result TEXT);
+CREATE INDEX IF NOT EXISTS jobs_account_created ON jobs(account_id, created DESC);
 CREATE TABLE IF NOT EXISTS archives (
  id TEXT PRIMARY KEY, account_id TEXT NOT NULL, machine_id TEXT NOT NULL,
  path TEXT NOT NULL, checksum TEXT NOT NULL, size INTEGER NOT NULL, created REAL NOT NULL,
@@ -103,6 +104,7 @@ class Database:
                 "machines": {"last_probe": "REAL"},
                 "admin": {"contact": "TEXT NOT NULL DEFAULT ''"},
                 "applicants": {"deleted_at": "REAL"},
+                "jobs": {"result": "TEXT"},
                 "accounts": {
                     "credential_cipher": "TEXT",
                     "is_admin": "INTEGER",

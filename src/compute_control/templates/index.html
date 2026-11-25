@@ -9,6 +9,9 @@
   <script src="/static/charts.js" defer></script>
   <script src="/static/guides.js" defer></script>
   <script src="/static/admin.js" defer></script>
+  <script src="/static/retirement_admin.js" defer></script>
+  <script src="/static/account_inventory.js" defer></script>
+  <script src="/static/jobs.js" defer></script>
   <script src="/static/archive_admin.js" defer></script>
   <script src="/static/people_admin.js" defer></script>
   <script src="/static/credentials.js" defer></script>
@@ -26,8 +29,9 @@
       <p id="bootstrap" class="muted" hidden>管理员尚未初始化，请由控制主机管理员完成初始化。</p>
       <form id="login-form" class="panel login">
         <div class="login-heading"><h2 id="login-title">申请者模式</h2><button type="button" id="admin-entry" disabled>管理员入口</button></div>
-        <label id="login-label" for="login-name">登记姓名（英文字母不区分大小写）</label><input id="login-name" name="username" required maxlength="80" autocomplete="username">
+        <label id="login-label" for="login-name">登记姓名</label><input id="login-name" name="username" required maxlength="80" autocomplete="username">
         <div id="login-password-wrap" hidden><label for="login-password">管理员密码</label><input id="login-password" name="password" type="password" maxlength="256" autocomplete="current-password"></div>
+        <label class="check"><input name="remember_me" type="checkbox" checked>保持登录</label>
         <button class="primary" type="submit" disabled>进入</button>
       </form>
     </section>
@@ -104,6 +108,11 @@
     <label id="archive-password-label" for="archive-restore-password">恢复后的登录密码</label><input id="archive-restore-password" name="password" type="password" minlength="3" maxlength="256" autocomplete="new-password">
     <footer><button type="button" data-close>取消</button><button type="submit" class="primary">确认恢复账号和目录</button></footer>
   </form></dialog>
+  <dialog id="retirement-dialog"><h2>审阅回收</h2>
+    <p id="retirement-target" class="plain-text"></p>
+    <div id="retirement-activity" aria-live="polite"></div>
+    <footer><button type="button" data-close>暂不回收</button><div id="retirement-action" class="actions row-actions"></div></footer>
+  </dialog>
   <dialog id="assignment-dialog"><form id="assignment-form"><h2 id="assignment-title">重新分配账号</h2>
     <label>新归属姓名<select name="person_id" required></select></label>
     <p class="muted">只调整平台归属及额度，保留 Linux 用户与数据；如需停止旧持有人使用原密码，请另行重设密码。</p>

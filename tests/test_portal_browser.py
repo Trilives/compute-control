@@ -87,7 +87,7 @@ def test_pinned_login_contact_requests_admin_decision_and_collapsible_comparison
     page.locator("#login-name").fill("admin")
     page.locator("#login-password").fill(ADMIN_PASSWORD)
     page.locator("#login-form button[type=submit]").click()
-    page.get_by_role("button", name="sudo 权限申请", exact=True).click()
+    page.get_by_role("button", name="审阅", exact=True).click()
     assert (
         page.evaluate("""async () => {
         await Promise.all([load(), load()]);
