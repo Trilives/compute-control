@@ -11,7 +11,7 @@
 
 申请者的姓名入口是内部身份声明，不是强身份认证。请部署在可信局域网或受控网络；如需面向不可信来源提供访问，应增加可靠的身份与访问控制。HTTPS 负责传输加密。
 
-当前版本：[v0.2.2](https://github.com/Trilives/compute-control/releases/tag/v0.2.2)。发行附件提供 wheel、源码包和 SHA-256 校验文件；不附带运行数据库、密码、主密钥或现场网络参数。
+当前版本为 v0.3.0，提供 wheel、源码包和 SHA-256 校验文件。[GitHub Release](https://github.com/Trilives/compute-control/releases/tag/v0.3.0) · [发布记录](docs/records/2026-11-25-v0.3.0-release.md)
 
 ## 快速启动
 

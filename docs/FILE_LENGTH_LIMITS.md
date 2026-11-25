@@ -50,7 +50,7 @@
 | `tests/test_accounts.py` | 190 | 179 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
 | `tests/test_archive.py` | 330 | 194 | 无 | 归档校验、跨账号占用复核、强制回收和失败保留 |
 | `tests/test_auth.py` | 190 | 186 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
-| `tests/test_browser.py` | 280 | 245 | 无 | 真实 Chromium 两角色流程、图表、完整指南、稳定表单与重启确认 |
+| `tests/test_browser.py` | 290 | 283 | 无 | 真实 Chromium 两角色流程、活跃账号统计、图表、表单与重启确认 |
 | `tests/test_remote_config.py` | 190 | 109 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
 | `tests/test_ssh_transport.py` | 190 | 123 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
 | `tests/test_worker.py` | 280 | 241 | 无 | 按被验证职责组织，覆盖异常和并发；当前小型测试集保持单篇可读 |
@@ -136,6 +136,7 @@
 | `tests/test_special_archive.py` | 150 | 110 | 无 | 特殊对象归档、恢复、校验与浏览器确认 |
 | `src/compute_control/static/account_inventory.js` | 100 | 58 | 无 | 审阅和单机账号共用的表格、权限显示及接管入口 |
 | `tests/test_unmanaged_accounts.py` | 110 | 85 | 无 | 多机器账号身份、权限、筛选与接管表单 |
+| `docs/records/2026-11-25-v0.3.0-release.md` | 60 | 17 | 无 | 活跃统计口径、账号管理更新及发行验收记录 |
 
 ## 清理时如何使用
 

@@ -103,6 +103,7 @@ class Service(
                 "SELECT machine_id FROM machine_password_changes WHERE state='pending'"
             )
         }
+        now = time.time()
         for row in rows:
             if session["role"] == "admin":
                 row["management_password_pending"] = row["id"] in pending
@@ -158,13 +159,16 @@ class Service(
                 (row["id"], row["id"]),
             )
             row["stale"] = (
-                not row["sampled"]
-                or time.time() - row["sampled"] > self.config.snapshot_seconds * 2
+                not row["sampled"] or now - row["sampled"] > self.config.snapshot_seconds * 2
             )
-            row["active_users_30d"] = self.db.one(
-                "SELECT COUNT(DISTINCT username) AS n FROM login_events WHERE machine_id=? AND ts>? AND username NOT IN (?, 'root')",
-                (row["id"], time.time() - 30 * 86400, row["username"]),
-            )["n"]
+            row.update(
+                self.db.one(
+                    "SELECT COUNT(DISTINCT username) FILTER (WHERE ts>?) AS active_users_15d, "
+                    "COUNT(DISTINCT username) AS active_users_30d FROM login_events "
+                    "WHERE machine_id=? AND ts>? AND username NOT IN (?, 'root')",
+                    (now - 15 * 86400, row["id"], now - 30 * 86400, row["username"]),
+                )
+            )
             if session["role"] != "admin":
                 row.pop("archive_root")
                 row.pop("username")

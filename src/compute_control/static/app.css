@@ -125,9 +125,9 @@ footer { margin-top: 28px; display: flex; justify-content: flex-end; gap: 10px; 
 .permission-switch input[role=switch]:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; } .permission-switch input[role=switch]:disabled { cursor: not-allowed; opacity: .5; }
 #contact-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 textarea { resize: vertical; }
-.monthly-count { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 0; color: var(--muted); }
-.monthly-count strong { color: var(--accent); font-size: 34px; line-height: 1; }
-.monthly-count small { font-size: 11px; }
+.active-account-count { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 0; color: var(--muted); }
+.active-account-count strong { color: var(--accent); font-size: 34px; line-height: 1; }
+.active-account-count small { font-size: 11px; }
 #guide-dialog, #machine-info-dialog { width: min(1000px, 96vw); }
 
 .operation-guide pre { background: var(--input); padding: 14px; border-radius: 8px; overflow: auto; }

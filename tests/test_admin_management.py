@@ -147,18 +147,25 @@ def test_password_reset_job_never_returns_cipher_and_updates_after_success(app, 
     assert result.json()["password"] == "123"
 
 
-def test_monthly_count_excludes_ssh_admin_and_root(app):
+def test_active_account_count_uses_rolling_windows_and_excludes_admins(app, client):
     target = machine(app)
+    now = time.time()
     with app.state.db.connect(write=True) as conn:
         conn.executemany(
             "INSERT INTO login_events VALUES (?,?,?)",
             [
-                (target["id"], name, time.time())
-                for name in ["operator", "root", "legacy", "worker"]
+                (target["id"], "operator", now),
+                (target["id"], "root", now),
+                (target["id"], "legacy", now - 14 * 86400),
+                (target["id"], "legacy", now - 7 * 86400),
+                (target["id"], "worker", now),
+                (target["id"], "outside_15_days", now - 16 * 86400),
+                (target["id"], "outside_30_days", now - 31 * 86400),
             ],
         )
-    result = app.state.service.visible_machines({"role": "admin"})[0]
-    assert result["active_users_30d"] == 2
+    result = client.get("/api/machines").json()[0]
+    assert result["active_users_15d"] == 2
+    assert result["active_users_30d"] == 3
 
 
 def test_v1_migration_keeps_data_and_creates_consistent_backup(tmp_path):

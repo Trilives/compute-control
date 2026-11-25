@@ -117,7 +117,15 @@ def test_admin_and_applicant_browser_flow(app):
             app.state.service.save_snapshot(target["id"], report, False)
             report["cpu_times"] = {"total": 2000, "idle": 900}
             app.state.service.save_snapshot(target["id"], report, False)
+            now = time.time()
+            with app.state.db.connect(write=True) as conn:
+                conn.executemany(
+                    "INSERT INTO login_events VALUES (?,?,?)",
+                    [(target["id"], "recent", now), (target["id"], "older", now - 16 * 86400)],
+                )
             page.reload()
+            expect(page.get_by_text("近 15 天活跃账号（不含管理账号）")).to_be_visible()
+            expect(page.locator(".active-account-count strong")).to_have_text("1")
             expect(page.locator(".line-chart")).to_have_count(0)
             page.locator(".history-details > summary").click()
             expect(page.locator(".line-chart")).to_have_count(4)

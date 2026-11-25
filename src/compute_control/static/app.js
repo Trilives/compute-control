@@ -157,7 +157,7 @@ function renderMachines(content) {
     }
     if (state.role === 'applicant') card.append(el('p', `本机已有 ${Portal.machineAccountCount(machine.id, state.person_id)} 个账号`, 'muted machine-account-count'));
     const snapshot = machine.snapshot;
-    card.append(monthlyCount(machine), el('p', `采集于 ${date(machine.sampled)}`, 'muted'));
+    card.append(activeAccountCount(machine), el('p', `采集于 ${date(machine.sampled)}`, 'muted'));
     if (machine.stale || machine.error) card.append(el('p', machine.error || '数据已过期，等待采集', 'badge warning'));
     if (state.role === 'admin' && machine.creation_blockers?.length) card.append(el('p', `不能开放申请：${machine.creation_blockers.join('；')}`, 'badge warning'));
     if (snapshot) {
@@ -193,8 +193,10 @@ function renderMachines(content) {
 function personActions(person) {
   const actions = el('div', undefined, 'actions'); actions.append(button('编辑', () => openPerson(person)), button('删除姓名', () => AdminPeople.open(person), 'danger')); return actions;
 }
-function monthlyCount(machine) {
-  const node = el('div', undefined, 'monthly-count'); node.append(el('span', '近 30 天活跃账号（不含管理账号）'), el('strong', machine.active_users_30d), el('small', machine.snapshot?.login_status || '无法统计')); return node;
+function activeAccountCount(machine) {
+  const node = el('div', undefined, 'active-account-count');
+  node.append(el('span', '近 15 天活跃账号（不含管理账号）'), el('strong', machine.active_users_15d), el('small', machine.snapshot?.login_status || '无法统计'));
+  return node;
 }
 function openMachine(machine) {
   const form = $('#machine-form'); form.reset(); form.dataset.machineId = machine?.id || '';
